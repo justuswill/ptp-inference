@@ -52,12 +52,9 @@ def _load_or_compute_hist_base(lit_model, config, experiment_dir, ckpt_path, ckp
             print(f"Loading hist_base from cache: {cache_path}")
             lit_model.hist_base = torch.load(cache_path, map_location="cpu", weights_only=True)
             return
-        print(f"Warning: {ckpt_path.name} is newer than cached {cache_path.name}.")
-        answer = input("Recompute hist_base from validation data? [y/N] ").strip().lower()
-        if answer not in ("y", "yes"):
-            print("Using cached histogram.")
-            lit_model.hist_base = torch.load(cache_path, map_location="cpu", weights_only=True)
-            return
+        print(f"Warning: {ckpt_path.name} is newer than cached {cache_path.name}; using cached histogram.")
+        lit_model.hist_base = torch.load(cache_path, map_location="cpu", weights_only=True)
+        return
 
     if "data" not in config:
         print("No data config found; cannot compute hist_base.")
@@ -245,7 +242,9 @@ def find_best_checkpoint(ckpt_dir: Path) -> Path:
     cb = ModelCheckpoint()
     for key, state in ckpt_data.get("callbacks", {}).items():
         if "ModelCheckpoint" in str(key):
-            cb.load_state_dict(state)
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", message="The dirpath has changed")
+                cb.load_state_dict(state)
             break
 
     best = cb.best_model_path
@@ -253,7 +252,6 @@ def find_best_checkpoint(ckpt_dir: Path) -> Path:
         print(f"Best checkpoint (score {cb.best_model_score}): {best}")
         return Path(best)
 
-    print("No best_model_path recorded; using last.ckpt.")
     return last
 
 

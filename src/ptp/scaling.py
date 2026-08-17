@@ -1,4 +1,9 @@
 CONFIGS = {
+    "qm9": dict(
+        hidden_size=768,
+        num_hidden_layers=12,
+        num_attention_heads=12,
+    ),
     "4k": dict(
         hidden_size=16,
         num_hidden_layers=1,
@@ -40,13 +45,10 @@ for key, value in CONFIGS.items():
     value["intermediate_size"] = 4 * value["hidden_size"]
 
 
-def make_scaling_llama(config_name: str, **kwargs):
+def make_scaling_llama(config_name: str, attn_implementation: str = "flex_attention", **kwargs):
     from transformers import LlamaConfig, LlamaForCausalLM
 
     config = CONFIGS[config_name]
-    model_config = LlamaConfig(
-        **kwargs,
-        **config
-    )
-    # todo copy embeddings from tinyllama?
+    model_config = LlamaConfig(**kwargs, **config)
+    model_config._attn_implementation = attn_implementation
     return LlamaForCausalLM(model_config)

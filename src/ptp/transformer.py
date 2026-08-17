@@ -141,10 +141,10 @@ class TransformerModel(torch.nn.Module):
             self.tokenizer = None
             self.model = model_id
         else:
-            self.tokenizer = AutoTokenizer.from_pretrained(model_id)
+            self.tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
             # Use torch_dtype parameter for Hugging Face compatibility
             self.model = AutoModelForCausalLM.from_pretrained(
-                model_id, torch_dtype=dtype,
+                model_id, dtype=dtype,
                 attn_implementation=attn_implementation,
                 **kwargs
             )
@@ -220,7 +220,7 @@ class TransformerModel(torch.nn.Module):
         self.inference_mode = False
         self.model.train()
 
-    def set_gate_window(self, gate_window: int):
+    def set_gate_window(self, gate_window: int, flag=False):
         """Update gate_window on all GatedLinearLoraMerged layers in-place."""
         for module in self.model.modules():
             if isinstance(module, GatedLinearLoraMerged):
@@ -337,8 +337,8 @@ class MixedTransformerModel(TransformerModel):
             )
         return ar_outputs, completion_outputs
 
-    def inference_forward(self, input_ids, auxiliaries=None, past_key_values=None,
-                          use_cache=True, attention_mask=None, position_ids=None):
+    def inference_forward(self, input_ids=None, auxiliaries=None, past_key_values=None,
+                          use_cache=True, attention_mask=None, position_ids=None, flag=False):
         """
         Single-pass inference forward combining AR tokens and auxiliary (proposed) tokens.
 
@@ -354,15 +354,18 @@ class MixedTransformerModel(TransformerModel):
             attention_mask:   custom attention mask (e.g. causal mask with KV cache offset)
             position_ids:     (B, T+A) explicit position IDs for all tokens
         """
-        embed_layer = self.model.get_input_embeddings()
-        inputs_embeds = embed_layer(input_ids)            # (B, T, H)
+        if input_ids is not None and input_ids.shape[1] > 0:
+            embed_layer = self.model.get_input_embeddings()
+            inputs_embeds = embed_layer(input_ids)            # (B, T, H)
+        else:
+            inputs_embeds = None
 
         if auxiliaries is not None and auxiliaries.shape[1] > 0:
             aux_embeds = self.u_embed(auxiliaries)        # (B, A, H)
-            self.set_gate_window(auxiliaries.shape[1])
-            inputs_embeds = torch.cat([inputs_embeds, aux_embeds], dim=1)  # (B, T+A, H)
+            self.set_gate_window(auxiliaries.shape[1], flag)
+            inputs_embeds = torch.cat([inputs_embeds, aux_embeds], dim=1) if inputs_embeds is not None else aux_embeds # (B, T+A, H)
         else:
-            self.set_gate_window(0)
+            self.set_gate_window(0, flag)
 
         return super().inference_forward(
             inputs_embeds=inputs_embeds,

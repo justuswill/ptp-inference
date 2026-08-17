@@ -56,6 +56,7 @@ class ParallelSamplingLightningModule(LightningModule):
         self.top_p = top_p
         self.hist_base = torch.tensor(hist_base, dtype=torch.float64) if hist_base is not None else None
         self._hist_accumulator: list[torch.Tensor] = []
+        self.checkpoint_save_mode: str = 'full'
 
     def configure_model(self) -> None:
         if self.model is None:
@@ -75,7 +76,7 @@ class ParallelSamplingLightningModule(LightningModule):
         for key, value in state_dict.items():
             if key.startswith("student."):
                 key = key.replace("student.", "model.", 1)
-            if ".u_adapter." in key:
+            if ".u_adapter." in key and ".u_embed." not in key:
                 key = key.replace(".u_adapter.", ".u_embed.", 1)
             renamed_state_dict[key] = value
 
@@ -249,11 +250,22 @@ class ParallelSamplingLightningModule(LightningModule):
         return logits
 
     def adapt_p(self, p):
-        top_k_probs, top_k_indices = torch.topk(p, k=self.top_k, dim=-1)
+        k = self.top_k if (self.top_k is not None and self.top_k > 0) else p.shape[-1]
+        top_k_probs, top_k_indices = torch.topk(p, k=k, dim=-1)
         # remove additional tokens if top_p is more restrictive
         remove = (top_k_probs.cumsum(dim=-1) - top_k_probs) > self.top_p
         top_k_probs = top_k_probs.masked_fill(remove, 0.0)
         # renormalize; sort by token index so CDF bins match vocab-sorted original
+        top_k_probs = top_k_probs / top_k_probs.sum(dim=-1, keepdim=True)
+        sort_idx = top_k_indices.argsort(dim=-1)
+        return top_k_probs.gather(-1, sort_idx), top_k_indices.gather(-1, sort_idx)
+
+    def new_adapt_p(self, p):
+        k = self.top_k if (self.top_k is not None and self.top_k > 0) else p.shape[-1]
+        top_k_probs, top_k_indices = torch.topk(p, k=k, dim=-1)
+        if self.top_p is not None and self.top_p < 1.0:
+            remove = (top_k_probs.cumsum(dim=-1) - top_k_probs) > self.top_p
+            top_k_probs = top_k_probs.masked_fill(remove, 0.0)
         top_k_probs = top_k_probs / top_k_probs.sum(dim=-1, keepdim=True)
         sort_idx = top_k_indices.argsort(dim=-1)
         return top_k_probs.gather(-1, sort_idx), top_k_indices.gather(-1, sort_idx)
@@ -511,6 +523,335 @@ class ParallelSamplingLightningModule(LightningModule):
             metrics['outputs'] = student_predicted
         return metrics
 
+    @staticmethod
+    def sample_from_logits(logits, auxiliaries):
+        right_bin_edges = torch.softmax(logits, dim=-1).cumsum(dim=-1)
+        right_bin_edges[..., -1] = 1
+        return (right_bin_edges > auxiliaries[..., None]).max(dim=-1).indices
+
+    @torch.inference_mode()
+    def generate_seq(self, prompt_ids, z_rnd_all=None,
+                     student_forward=None, teacher_forward=None, shared_kv_cache=False,
+                     needs_teacher=None, accepted_tokens=None, correct_first_token=True,
+                     max_new_tokens=None, max_length=None, return_metrics=True,
+                     ):
+        """
+        Generate sequences by iteratively calling the student / PTP model and then the verification / teacher model.
+        Allows for versatile inference modes.
+
+        Inputs:
+        shared_kv - Only use one kv-cache that gets filled on teacher calls. Saves time when using gated LoRA.
+        correct_first_token - Use the last non-auxiliary position to correct the first auxiliary position.
+                              This is well motivated for gated LoRA.
+        """
+        assert prompt_ids.shape[0] == 1, "batch size must be 1 for now"
+        metrics = {
+            'correct': [],
+        }
+        tokens_prompt = prompt_ids.shape[1]
+        tokens_to_fill = float('inf')
+        if max_new_tokens is not None:
+            tokens_to_fill = min(tokens_to_fill, max_new_tokens)
+        if max_length is not None:
+            tokens_to_fill = min(tokens_to_fill, max_length - tokens_prompt)
+        device = prompt_ids.device
+        if z_rnd_all is None:
+            z_rnd_all = torch.rand(tokens_to_fill + 1, device=device, dtype=torch.float32)
+        assert z_rnd_all.shape[0] >= tokens_to_fill, 'not enough random variables provided'
+
+        # Fill kv caches
+        kv_student = None
+        kv_teacher = None
+        teacher_forward = teacher_forward if teacher_forward is not None else self.model.inference_forward
+        outputs = teacher_forward(
+            input_ids=prompt_ids[:, :-1],
+            past_key_values=kv_teacher,
+            use_cache=True
+        )
+        kv_teacher = outputs.past_key_values
+        if not shared_kv_cache:
+            outputs = self.model.inference_forward(
+                input_ids=prompt_ids[:, :-1],
+                past_key_values=kv_student,
+                use_cache=True,
+                flag=True,
+            )
+            kv_student = outputs.past_key_values
+        else:
+            kv_student = kv_teacher
+
+        while tokens_to_fill > 0:
+            # --- Student proposal ---
+            n_prop = min(self.tokens_per_student_call, tokens_to_fill)
+            z_idx = prompt_ids.shape[1] - tokens_prompt
+            z_rnd = z_rnd_all[z_idx:z_idx + n_prop + 1]
+
+            if student_forward is None:
+                outputs = self.model.inference_forward(
+                    input_ids=prompt_ids[:, kv_student.get_seq_length():],
+                    auxiliaries=z_rnd[None, :n_prop],
+                    past_key_values=kv_student,
+                    use_cache=True
+                )
+            else:
+                outputs = student_forward(
+                    input_ids=prompt_ids[:, kv_student.get_seq_length():],
+                    auxiliaries=z_rnd[None, :n_prop],
+                    past_key_values=kv_student,
+                )
+
+            kv_student.crop(kv_student.get_seq_length() - n_prop)
+            full_logits = outputs.logits
+            # O-PTP
+            student_logits = full_logits[:, -n_prop:]
+            student_tokens = student_logits.argmax(dim=2)
+            if correct_first_token:
+                tgt_logits = self.adapt_logits(full_logits[:, -n_prop - 1])
+                correct_token = self.sample_from_logits(tgt_logits, z_rnd[0])
+                student_tokens[:, 0] = correct_token
+            input_ids = torch.cat([prompt_ids, student_tokens], dim=1)
+
+            # --- Teacher verification ---
+            if needs_teacher is None or needs_teacher(student_tokens, student_logits):
+                outputs = teacher_forward(
+                    input_ids=input_ids[:, kv_teacher.get_seq_length():],
+                    past_key_values=kv_teacher,
+                    use_cache=True
+                )
+                # todo: could be less strict, comparing with new_tokens to keep more cache
+                kv_teacher.crop(kv_teacher.get_seq_length() - n_prop)
+                tgt_logits = self.adapt_logits(outputs.logits[:, -n_prop - 1:])
+                correct_tokens = self.sample_from_logits(tgt_logits, z_rnd)
+            else:
+                tgt_logits = None
+                correct_tokens = None
+
+            if accepted_tokens is not None:
+                new_tokens = accepted_tokens(student_tokens, correct_tokens, student_logits, tgt_logits, z_rnd)
+            else:
+                matches = student_tokens == correct_tokens[:, :-1]
+                new_tokens = correct_tokens[:, :(matches.float().argmin() if not matches.all() else n_prop) + 1]
+            metrics['correct'] += [new_tokens.shape[1]]
+            prompt_ids = torch.cat([prompt_ids, new_tokens], dim=1)
+            tokens_to_fill -= new_tokens.shape[1]
+            if self.model.tokenizer.eos_token_id in new_tokens:
+                eos_idx = prompt_ids.shape[1] - new_tokens.shape[1] + 1 + (new_tokens[0] == self.model.tokenizer.eos_token_id).nonzero()[0]
+                prompt_ids = prompt_ids[:, :eos_idx]
+                break
+
+        if return_metrics:
+            metrics = {
+                'completion': prompt_ids,
+                'correct_per_call': np.mean(metrics['correct']),
+                'correct_all': metrics['correct'],
+                'num_calls': len(metrics['correct']),
+            }
+            return prompt_ids, metrics
+        return prompt_ids
+
+
+    @staticmethod
+    def _build_tree_mask(T_ar: int, n: int, S_kv: int, device, parent_list):
+        """
+        Additive attention mask + position ids for a masked tree forward, used
+        by generate_seq_tree's default student/teacher forward: T_ar real/AR
+        tokens attend causally as usual; each of the n tree nodes attends to
+        the AR context plus its own ancestor chain (per parent_list) and
+        itself, never to unrelated tree nodes. Nodes at the same depth share a
+        position id (they're candidates for the same upcoming slot).
+        """
+        depth: list[int] = []
+        for p in parent_list:
+            depth.append(1 if p is None else depth[p] + 1)
+
+        T = T_ar + n
+        S = S_kv + T
+        mask = torch.full((1, 1, T, S), float('-inf'), device=device, dtype=torch.float32)
+        for q in range(T_ar):
+            mask[0, 0, q, :S_kv + q + 1] = 0.0
+        for k in range(n):
+            mask[0, 0, T_ar + k, :S_kv + T_ar] = 0.0
+            mask[0, 0, T_ar + k, S_kv + T_ar + k] = 0.0  # self
+            p = parent_list[k]
+            while p is not None:
+                mask[0, 0, T_ar + k, S_kv + T_ar + p] = 0.0
+                p = parent_list[p]
+
+        pos_ids = torch.zeros(1, T, dtype=torch.long, device=device)
+        for q in range(T_ar):
+            pos_ids[0, q] = S_kv + q
+        last_ar_pos = S_kv + T_ar - 1
+        for k in range(n):
+            pos_ids[0, T_ar + k] = last_ar_pos + depth[k]
+
+        return mask, pos_ids
+
+    @torch.inference_mode()
+    def generate_seq_tree(self, prompt_ids, tree, z_rnd_all=None,
+                     student_forward=None, teacher_forward=None, shared_kv_cache=False,
+                     needs_teacher=None, accepted_tokens=None, correct_first_token=True,
+                     max_new_tokens=None, max_length=None, return_metrics=True,
+                     ):
+        """
+        Tree-structured variant of generate_seq.
+
+        tree(n_prop) -> parent_list: for the current round, returns a length-n_nodes
+        list of int|None (parent_list[k] = index of node k's parent within this
+        round's n_nodes, or None if k attaches directly to the real/AR context).
+        n_nodes is derived from this list and may exceed n_prop, e.g. several
+        candidate strands proposed in one round. Defaults to a plain flat chain of
+        n_prop nodes (i.e. classic generate_seq behaviour).
+
+        student_forward(input_ids, auxiliaries, past_key_values, parent_list) and
+        teacher_forward(input_ids, past_key_values, use_cache, parent_list), if given,
+        replace the default tree-masked forward (see _build_tree_mask) — pass None
+        (the default) to use the standard tree attention mask, where each node
+        attends only to its own ancestors. Unlike generate_seq, verification
+        re-checks EVERY node against its own parent's context (not just a flat
+        main-strand proposal), so correct_tokens has the same shape as the proposed
+        tree: e.g. 2b (parent 1b) can get a different correct token from 2a (parent
+        1a) even at the same depth.
+
+        Inputs:
+        shared_kv - Only use one kv-cache that gets filled on teacher calls. Saves time when using gated LoRA.
+        correct_first_token - Use the last non-auxiliary position to correct every ROOT
+                              node (parent=None), e.g. every strand's first token.
+                              This is well motivated for gated LoRA.
+        """
+        assert prompt_ids.shape[0] == 1, "batch size must be 1 for now"
+        assert accepted_tokens is not None, "generate_seq_tree requires accepted_tokens"
+        metrics = {
+            'correct': [],
+        }
+        tokens_prompt = prompt_ids.shape[1]
+        tokens_to_fill = float('inf')
+        if max_new_tokens is not None:
+            tokens_to_fill = min(tokens_to_fill, max_new_tokens)
+        if max_length is not None:
+            tokens_to_fill = min(tokens_to_fill, max_length - tokens_prompt)
+        device = prompt_ids.device
+
+        if z_rnd_all is None:
+            max_n_nodes = len(tree(self.tokens_per_student_call))
+            z_rnd_all = torch.rand(int(tokens_to_fill), max_n_nodes, device=device, dtype=torch.float32)
+
+        # Fill kv caches. The teacher prefill always uses the plain model forward
+        # (not the possibly tree-aware teacher_forward) since there's no tree yet.
+        kv_student = None
+        kv_teacher = None
+        outputs = self.model.inference_forward(
+            input_ids=prompt_ids[:, :-1],
+            past_key_values=kv_teacher,
+            use_cache=True
+        )
+        kv_teacher = outputs.past_key_values
+        if not shared_kv_cache:
+            outputs = self.model.inference_forward(
+                input_ids=prompt_ids[:, :-1],
+                past_key_values=kv_student,
+                use_cache=True,
+                flag=True,
+            )
+            kv_student = outputs.past_key_values
+        else:
+            kv_student = kv_teacher
+
+        while tokens_to_fill > 0:
+            # --- Student proposal: a tree of n_nodes candidate tokens ---
+            n_prop = min(self.tokens_per_student_call, tokens_to_fill)
+            parent_list = tree(n_prop)
+            n_nodes = len(parent_list)
+            z_idx = prompt_ids.shape[1] - tokens_prompt
+            z_rnd = z_rnd_all[z_idx, :n_nodes]
+
+            input_ids_student = prompt_ids[:, kv_student.get_seq_length():]
+            if student_forward is None:
+                mask, pos_ids = self._build_tree_mask(
+                    input_ids_student.shape[1], n_nodes, kv_student.get_seq_length(), device, parent_list,
+                )
+                outputs = self.model.inference_forward(
+                    input_ids=input_ids_student,
+                    auxiliaries=z_rnd[None, :],
+                    past_key_values=kv_student,
+                    use_cache=True,
+                    attention_mask=mask,
+                    position_ids=pos_ids,
+                )
+            else:
+                outputs = student_forward(
+                    input_ids=input_ids_student,
+                    auxiliaries=z_rnd[None, :],
+                    past_key_values=kv_student,
+                    parent_list=parent_list,
+                )
+
+            kv_student.crop(kv_student.get_seq_length() - n_nodes)
+            full_logits = outputs.logits
+            student_logits = full_logits[:, -n_nodes:]
+            student_tokens = student_logits.argmax(dim=2)
+            if correct_first_token:
+                # Every root shares the same pre-tree context, so they all read
+                # from the same non-auxiliary reference row, each with its own z.
+                roots = [i for i, p in enumerate(parent_list) if p is None]
+                tgt_logits_root = self.adapt_logits(full_logits[:, -n_nodes - 1])
+                for r in roots:
+                    student_tokens[:, r] = self.sample_from_logits(tgt_logits_root, z_rnd[r])
+            input_ids = torch.cat([prompt_ids, student_tokens], dim=1)
+
+            # --- Teacher verification: every node checked against its own parent's context ---
+            if needs_teacher is None or needs_teacher(student_tokens, student_logits):
+                teacher_fed = input_ids[:, kv_teacher.get_seq_length():]
+                T_ar = teacher_fed.shape[1] - n_nodes
+                if teacher_forward is None:
+                    mask, pos_ids = self._build_tree_mask(
+                        T_ar, n_nodes, kv_teacher.get_seq_length(), device, parent_list,
+                    )
+                    outputs = self.model.inference_forward(
+                        input_ids=teacher_fed,
+                        auxiliaries=None,
+                        past_key_values=kv_teacher,
+                        use_cache=True,
+                        attention_mask=mask,
+                        position_ids=pos_ids,
+                    )
+                else:
+                    outputs = teacher_forward(
+                        input_ids=teacher_fed,
+                        past_key_values=kv_teacher,
+                        use_cache=True,
+                        parent_list=parent_list,
+                    )
+                kv_teacher.crop(kv_teacher.get_seq_length() - n_nodes)
+                src_idx = torch.tensor(
+                    [T_ar - 1 if p is None else T_ar + p for p in parent_list], device=device,
+                )
+                tgt_logits = self.adapt_logits(outputs.logits[:, src_idx])
+                correct_tokens = self.sample_from_logits(tgt_logits, z_rnd)
+            else:
+                tgt_logits = None
+                correct_tokens = None
+
+            new_tokens = accepted_tokens(student_tokens, correct_tokens, student_logits, tgt_logits, z_rnd, parent_list)
+            metrics['correct'] += [new_tokens.shape[1]]
+            prompt_ids = torch.cat([prompt_ids, new_tokens], dim=1)
+            tokens_to_fill -= new_tokens.shape[1]
+            if self.model.tokenizer.eos_token_id in new_tokens:
+                eos_idx = prompt_ids.shape[1] - new_tokens.shape[1] + 1 + \
+                          (new_tokens[0] == self.model.tokenizer.eos_token_id).nonzero()[0]
+                prompt_ids = prompt_ids[:, :eos_idx]
+                break
+
+        if return_metrics:
+            metrics = {
+                'completion': prompt_ids,
+                'correct_per_call': np.mean(metrics['correct']),
+                'correct_all': metrics['correct'],
+                'num_calls': len(metrics['correct']),
+            }
+            return prompt_ids, metrics
+        return prompt_ids
+
+
     def proposals(self, num_tokens=None, student_p=None, n_verify=None, double_at=100, metrics=None):
         """
         Optimize proposals B wrt overhead adjusted expected # correct tokens
@@ -583,8 +924,9 @@ class ParallelSamplingLightningModule(LightningModule):
             r = num_tokens % M
             B = torch.zeros([A.shape[0]], dtype=int)
             B[A_idx[:R]] = M
-            B[A_idx[R]] = r
-            if r > 0:
+            if r > 0 and R < A.shape[0]:
+                B[A_idx[R]] = r
+            if r > 0 and R < A.shape[0]:
                 lam = float(A[A_idx[R]] * (H[r] - H[r - 1]))
             else:
                 lam = float(A[A_idx[R - 1]] * (H[M] - H[M - 1]))
@@ -617,6 +959,7 @@ class ParallelSamplingLightningModule(LightningModule):
     @torch.inference_mode()
     def generate(self, batch, max_new_tokens, return_metrics=False, return_past_key_values=False,
                  eos=None, fixed_tokens=True, pad_token=13, past_kv_cache=None, callback=None,
+                 oracle_ref_ids=None,  # ORACLE DEBUG — remove after testing
                  **kwargs):
         """
         Partial Quadratic Coding using kv-cached Gated LoRA
@@ -633,8 +976,8 @@ class ParallelSamplingLightningModule(LightningModule):
         prompt_ids = batch['prompt_ids']
         assert prompt_ids.shape[0] == 1, "Batch size must be 1"
         assert self.model.inference_mode, "Call enter_inference_mode() before generate()"
-        assert self.top_k is not None and self.top_k > 0
-        assert self.top_p is not None and self.top_p < 1.0
+        # assert self.top_k is not None and self.top_k > 0
+        # assert self.top_p is not None and self.top_p < 1.0
         dev = prompt_ids.device
         tpsc = self.tokens_per_student_call
         ones_tpsc = torch.ones([1, tpsc], dtype=torch.long, device=dev)
@@ -646,6 +989,8 @@ class ParallelSamplingLightningModule(LightningModule):
         # Verify in parallel
         tokens_to_fill = max_new_tokens
         tokens_to_verify = max_new_tokens
+        ref_offset = 0          # ORACLE DEBUG — remove after testing
+        initial_prompt_len = prompt_ids.shape[1]  # ORACLE DEBUG — remove after testing
         z_rnd_all = torch.rand([prompt_ids.shape[0], max_new_tokens + tpsc + (num_proposed_tokens if fixed_tokens else 0)], device=dev, dtype=torch.float32)
         if fixed_tokens:
             n_props = ((num_proposed_tokens // tpsc) * [tpsc] + [(num_proposed_tokens % tpsc)] + tpsc * [0])[:tpsc]
@@ -710,14 +1055,12 @@ class ParallelSamplingLightningModule(LightningModule):
             for d, n_prop in enumerate(n_props):
                 input_position_ids[:, midx: midx + n_prop] -= midx - pos + n_verify - d + 1
                 midx += n_prop
-            # Dense additive attention mask [1, 1, Q_LEN, KV_LEN].
-            # SDPA handles variable KV_LEN natively without per-shape recompilation.
             midx = pos
             input_mask = torch.tril(torch.ones(Q_LEN, seq_len, device=dev), diagonal=K)
             for d, n_prop in enumerate(n_props):
                 input_mask[midx: midx + n_prop, P - n_verify + d : K + midx] = 0
                 midx += n_prop
-            input_mask = (1 - input_mask[None, None].to(torch.float16)) * -1e15
+            input_mask = (1 - input_mask[None, None].to(next(self.parameters()).dtype)) * -1e15
 
             # Student proposals
             if not fixed_tokens:
@@ -759,6 +1102,25 @@ class ParallelSamplingLightningModule(LightningModule):
                 num_correct[matches.all(dim=1)] = n_verify
                 num_correct = int(num_correct[0])
                 num_new = num_correct + 1
+                # ORACLE DEBUG — remove after testing
+                if oracle_ref_ids is not None:
+                    metrics['correct'] += [num_new]
+                    ref_offset += num_new
+                    # Discard verify window + proposals; keep oracle prefix in KV
+                    kv_cache.crop(initial_prompt_len + ref_offset - num_new)
+                    # prompt_ids = original prompt + full accepted oracle prefix
+                    prompt_ids = torch.cat([
+                        prompt_ids[:, :initial_prompt_len],
+                        oracle_ref_ids[:, :ref_offset].to(dev),
+                    ], dim=1)
+                    # All proposals at depth 0: assume none of to-be-verified are correct
+                    n_props = self.proposals(n_verify=0, num_tokens=num_proposed_tokens, metrics=metrics)
+                    n_props = [tpsc] + [0] * (len(n_props) - 1)
+                    tokens_to_fill = tokens_to_verify  # n_verify = 0 → else branch fires
+                    if eos in oracle_ref_ids[:, ref_offset - num_new : ref_offset]:
+                        break
+                    continue
+                # END ORACLE DEBUG
                 tokens_to_verify -= num_correct
                 kv_cache.crop(prompt_ids.shape[-1] - (n_verify - num_correct))
                 prev_prop = sum(n_props[:num_correct])
@@ -801,8 +1163,19 @@ class ParallelSamplingLightningModule(LightningModule):
                 if eos in correct_tokens[:, :num_correct + 1]:
                     break
             else:
-                # Only relevant if fixed_tokens=False and we don't force correct tokens
-                raise NotImplementedError
+                # ORACLE DEBUG — remove after testing
+                # n_verify == 0: place student proposals into verify window for next step
+                if oracle_ref_ids is not None:
+                    ths_proposals = student_predicted[:, :n_props[0]]
+                    prompt_ids = torch.cat([prompt_ids, ths_proposals], dim=1)
+                    # Crop KV to remove proposals so next step re-processes them
+                    kv_cache.crop(prompt_ids.shape[1] - n_props[0])
+                    tokens_to_fill = tokens_to_verify - n_props[0]  # n_verify_next = n_props[0] - 1
+                    tokens_to_verify -= 1
+                    n_props = [n_props[0]] + [0] * (len(n_props) - 1)
+                else:
+                    raise NotImplementedError
+                # END ORACLE DEBUG
             # else:
             #     # Accept one token
             #     tgt_logits = self.adapt_logits(tgt_logits[:, -1:])
@@ -847,6 +1220,13 @@ class ParallelSamplingLightningModule(LightningModule):
 
             # torch.cuda.synchronize()
             # timing['step'] += [time.time() - s]
+
+        # Remove last prediction
+        try:
+            if ths_student_predicted.shape[1] > 1:
+                prompt_ids = prompt_ids[:, :-ths_student_predicted.shape[1]+1]
+        except NameError:
+            pass
 
         # print(1000 * np.mean(timing['call'][1:]), 1000 * timing['call'][0], 1000 * np.mean(timing['step']))
         # plt.scatter(metrics['off'], metrics['offp'], s=2, alpha=0.5); plt.gca().set(xlabel='If the predicted token is wrong, the k-th one after is', ylabel='student confidence for actual correct token'); plt.show()

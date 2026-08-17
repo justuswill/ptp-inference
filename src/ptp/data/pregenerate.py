@@ -86,7 +86,10 @@ def main(experiment_dir: Path, precision: str, batch_size: int, store_interval: 
     else:
         device = torch.device('cpu')
     print(f"Using device: {device}")
-    teacher = TransformerModel(**config['teacher']).eval().to(device)
+    if '_target_' in config.get('teacher', {}):
+        teacher = instantiate(config['teacher']).eval().to(device)
+    else:
+        teacher = TransformerModel(**config['teacher']).eval().to(device)
     try:
         teacher = torch.compile(teacher, mode='max-autotune')
     except RuntimeError:

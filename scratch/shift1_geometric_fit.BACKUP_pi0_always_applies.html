@@ -1,0 +1,616 @@
+<title>Tokens accepted per call — observed vs. shifted-Geometric fit</title>
+<style>
+  .viz-root {
+    color-scheme: light;
+    --surface-1:      #fcfcfb;
+    --page:           #f9f9f7;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #898781;
+    --gridline:       #e1e0d9;
+    --baseline:       #c3c2b7;
+    --border:         rgba(11,11,11,0.10);
+    --series-1:       #2a78d6; /* correct_count_hist (base) */
+    --series-2:       #3fa15e; /* seq-ptp */
+    --series-3:       #eb6834; /* choice-5 */
+    --series-4:       #4a3aa7; /* k-sweep P(X=2) */
+    --series-5:       #1baf7a; /* k-sweep zero-inflated branching fit */
+    --series-6:       #e87ba4; /* k-sweep disk-table-calibrated branching fit */
+    --series-7:       #eda100; /* choice-2 */
+    --series-8:       #e34948; /* choice-50 */
+    --series-9:       #008300; /* k-sweep joint-weighted fit (across seqptp/choice-2/5/50) */
+    --series-10:      #3a3a38; /* k-sweep joint-MLE fit */
+    --series-11:      #0891b2; /* seq-n-choice-1000 (standalone branching fit) */
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) .viz-root {
+      color-scheme: dark;
+      --surface-1: #1a1a19; --page: #0d0d0d; --text-primary: #ffffff;
+      --text-secondary: #c3c2b7; --text-muted: #898781;
+      --gridline: #2c2c2a; --baseline: #383835; --border: rgba(255,255,255,0.10);
+      --series-1: #3987e5; --series-2: #4fbb71; --series-3: #d95926; --series-4: #9085e9; --series-5: #199e70; --series-6: #d55181; --series-7: #c98500; --series-8: #e66767; --series-9: #3ecf3e; --series-10: #d4d4d0; --series-11: #22d3ee;
+    }
+  }
+  :root[data-theme="dark"] .viz-root {
+    color-scheme: dark;
+    --surface-1: #1a1a19; --page: #0d0d0d; --text-primary: #ffffff;
+    --text-secondary: #c3c2b7; --text-muted: #898781;
+    --gridline: #2c2c2a; --baseline: #383835; --border: rgba(255,255,255,0.10);
+    --series-1: #3987e5; --series-2: #4fbb71; --series-3: #d95926; --series-4: #9085e9; --series-5: #199e70; --series-6: #d55181; --series-7: #c98500; --series-8: #e66767; --series-9: #3ecf3e; --series-10: #d4d4d0; --series-11: #22d3ee;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--page); }
+  .viz-root { background: var(--page); min-height: 100vh; padding: 32px 16px; }
+  .card {
+    max-width: 800px; margin: 0 auto 20px; background: var(--surface-1);
+    border: 1px solid var(--border); border-radius: 12px; padding: 28px 32px 22px;
+  }
+  h1 { font-size: 18px; font-weight: 600; color: var(--text-primary); margin: 0 0 4px; }
+  .subtitle { font-size: 13px; color: var(--text-secondary); margin: 0 0 6px; }
+  .formula { font-size: 12.5px; color: var(--text-muted); margin: 0 0 18px; font-family: ui-monospace, monospace; }
+  .legend { display: flex; gap: 18px; margin: 14px 0 2px; flex-wrap: wrap; font-size: 12px; color: var(--text-secondary); }
+  .legend-item { display: flex; align-items: center; gap: 6px; }
+  .legend-swatch-bar { width: 12px; height: 8px; border-radius: 2px; }
+  .legend-swatch-line { width: 14px; height: 0; border-top: 2px solid; }
+  .axis-label { fill: var(--text-muted); font-size: 10.5px; }
+  .axis-title { fill: var(--text-secondary); font-size: 12px; }
+  .gridline { stroke: var(--gridline); stroke-width: 1; }
+  .baseline { stroke: var(--baseline); stroke-width: 1; }
+  .model-line { fill: none; stroke-width: 2; }
+  #tooltip {
+    position: fixed; pointer-events: none; background: #1a1a19;
+    border: 1px solid rgba(255,255,255,0.12); border-radius: 8px; padding: 8px 10px;
+    font-size: 12px; color: #ffffff; box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+    opacity: 0; transition: opacity 0.1s; z-index: 10; white-space: nowrap;
+  }
+  #tooltip .row { display: flex; align-items: center; gap: 6px; }
+  #tooltip .label { color: #c3c2b7; }
+  #tooltip .val { color: #ffffff; font-weight: 600; margin-left: auto; padding-left: 14px; }
+  .stat-row { display: flex; gap: 24px; margin-top: 14px; font-size: 12.5px; color: var(--text-secondary); }
+  .stat-row b { color: var(--text-primary); font-weight: 600; }
+</style>
+
+<div class="viz-root" id="root"></div>
+<div id="tooltip"></div>
+
+<script>
+// Shared fit parameters (same four fits appear on every non-base panel below):
+//  - P(T=1) fit:      calibrated against the choice-k P(X=2) sweep (kSweep, below)
+//  - E[T] fit:         NLS against E[G] means from the five 100-question-run datasets ONLY
+//                      (seq-ptp/choice-2/choice-5/choice-50/seq-n-choice-1000)
+//  - joint MLE fit:    (pi0,p,rho) shared via full-histogram MLE across all five datasets
+//  - joint weighted:   same five datasets, weighted least-squares (G=2..5 priority x10)
+const sharedFitParams = 'P(T=1) fit: &pi;&#770;&#8320;=0.095, p&#770;=0.726, &rho;&#770;=0.630 &nbsp;&middot;&nbsp; E[T] fit: &pi;&#770;&#8320;=0.188, p&#770;=0.838, &rho;&#770;=0.674 &nbsp;&middot;&nbsp; joint MLE: &pi;&#770;&#8320;=0.000, p&#770;=0.675, &rho;&#770;=0.868 &nbsp;&middot;&nbsp; joint weighted: &pi;&#770;&#8320;=0.074, p&#770;=0.709, &rho;&#770;=0.754';
+
+const datasets = [
+  {
+    id: 'base',
+    title: 'Tokens accepted per call — correct_count_hist.pt',
+    subtitle: 'correct_count_hist.pt · vicuna checkpoint',
+    seriesVar: '--series-1',
+    shift: 1,
+    p: 0.698,
+    r2: 0.998,
+    mean: 3.306, std: 2.836,
+    obs:  [0.00057,0.29647,0.22014,0.15565,0.10242,0.06715,0.04467,0.03256,0.02148,0.0154,0.0097,0.00865,0.00637,0.00523,0.00575,0.00219,0.00143,0.00105,0.00109,0.00057,0.00147],
+    pred: [0.00057,0.30237,0.21096,0.14718,0.10269,0.07164,0.04998,0.03487,0.02433,0.01697,0.01184,0.00826,0.00576,0.00402,0.00281,0.00196,0.00137,0.00095,0.00066,0.00046,0.00032],
+  },
+  {
+    id: 'seqptp',
+    title: 'Tokens accepted per call — seq-ptp',
+    subtitle: 'seq-ptp per-call samples, n=4159 (26 floor violations excluded) · vicuna checkpoint',
+    seriesVar: '--series-2',
+    formula: 'G = 1 + T,  T = extinction time of zero-inflated BetaBinomial(K=1, &alpha;,&beta;) branching process',
+    mean: 4.121, std: 2.796,
+    obs: [0.0,0.00625,0.33446,0.21303,0.14499,0.09954,0.06083,0.03967,0.02837,0.01972,0.01346,0.00866,0.0089,0.00481,0.00433,0.00313,0.00264,0.00216,0.0024,0.0012,0.00144],
+    curves: [
+      { label: 'P(T=1) fit',      colorVar: '--series-5',  r2: 0.998, values: [0.0,0.0,0.34294,0.22533,0.14806,0.09728,0.06392,0.042,0.0276,0.01813,0.01191,0.00783,0.00514,0.00338,0.00222,0.00146,0.00096,0.00063,0.00041,0.00027,0.00018] },
+      { label: 'E[T] fit',        colorVar: '--series-6',  r2: 0.997, values: [0.0,0.0,0.32016,0.21766,0.14797,0.1006,0.06839,0.0465,0.03161,0.02149,0.01461,0.00993,0.00675,0.00459,0.00312,0.00212,0.00144,0.00098,0.00067,0.00045,0.00031] },
+      { label: 'joint MLE fit',   colorVar: '--series-10', r2: 0.998, values: [0.0,0.0,0.32456,0.21922,0.14807,0.10001,0.06755,0.04563,0.03082,0.02082,0.01406,0.0095,0.00641,0.00433,0.00293,0.00198,0.00134,0.0009,0.00061,0.00041,0.00028] },
+      { label: 'joint weighted fit', colorVar: '--series-9', r2: 0.998, values: [0.0,0.0,0.34303,0.22536,0.14805,0.09727,0.0639,0.04198,0.02758,0.01812,0.0119,0.00782,0.00514,0.00338,0.00222,0.00146,0.00096,0.00063,0.00041,0.00027,0.00018] },
+    ],
+  },
+  {
+    id: 'choice2branch',
+    title: 'Tokens accepted per call — seq-ptp-choice-2 (branching-process fit)',
+    subtitle: 'choice-2 per-call samples, n=3843 (3 floor violations excluded) · vicuna checkpoint',
+    seriesVar: '--series-7',
+    formula: 'G = 1 + T,  T = extinction time of zero-inflated BetaBinomial(K=2, &alpha;,&beta;) branching process',
+    mean: 4.423, std: 2.970,
+    obs: [0.0,0.00078,0.29196,0.20609,0.15431,0.10851,0.07052,0.0484,0.03149,0.0242,0.01301,0.01145,0.01067,0.00859,0.0039,0.0039,0.00286,0.00234,0.00286,0.00078,0.00338],
+    curves: [
+      { label: 'P(T=1) fit',      colorVar: '--series-5',  r2: 0.996, values: [0.0,0.0,0.2762,0.20882,0.15335,0.11029,0.07809,0.05463,0.03786,0.02603,0.01779,0.01209,0.00818,0.00552,0.00371,0.00249,0.00166,0.00111,0.00074,0.00049,0.00033] },
+      { label: 'E[T] fit',        colorVar: '--series-6',  r2: 0.998, values: [0.0,0.0,0.2842,0.20602,0.1483,0.10613,0.07557,0.05358,0.03784,0.02664,0.0187,0.01309,0.00914,0.00637,0.00443,0.00308,0.00214,0.00148,0.00102,0.00071,0.00049] },
+      { label: 'joint MLE fit',   colorVar: '--series-10', r2: 0.999, values: [0.0,0.0,0.29559,0.2099,0.14839,0.10451,0.07336,0.05134,0.03583,0.02495,0.01734,0.01202,0.00832,0.00575,0.00397,0.00274,0.00188,0.00129,0.00089,0.00061,0.00042] },
+      { label: 'joint weighted fit', colorVar: '--series-9', r2: 0.999, values: [0.0,0.0,0.29603,0.21281,0.15099,0.10602,0.07381,0.05103,0.03507,0.02399,0.01633,0.01108,0.00749,0.00505,0.0034,0.00228,0.00153,0.00102,0.00068,0.00046,0.0003] },
+    ],
+  },
+  {
+    id: 'choice5branch',
+    title: 'Tokens accepted per call — seq-ptp-choice-5 (branching-process fit)',
+    subtitle: 'choice-5 per-call samples, n=3472 · vicuna checkpoint',
+    seriesVar: '--series-3',
+    formula: 'G = 1 + T,  T = extinction time of zero-inflated BetaBinomial(K=5, &alpha;,&beta;) branching process',
+    mean: 4.823, std: 3.081,
+    obs: [0.0,0.0,0.21025,0.21976,0.16359,0.11866,0.07575,0.06106,0.04378,0.02707,0.02016,0.0144,0.01267,0.00979,0.00691,0.00346,0.00288,0.00173,0.00202,0.00115,0.0049],
+    curves: [
+      { label: 'P(T=1) fit',      colorVar: '--series-5',  r2: 0.980, values: [0.0,0.0,0.21579,0.18359,0.14943,0.11768,0.09033,0.06792,0.05022,0.03661,0.02637,0.0188,0.01329,0.00932,0.00649,0.00449,0.00309,0.00212,0.00145,0.00098,0.00067] },
+      { label: 'E[T] fit',        colorVar: '--series-6',  r2: 0.969, values: [0.0,0.0,0.25286,0.19286,0.14566,0.10908,0.08108,0.05987,0.04394,0.03209,0.02332,0.01687,0.01216,0.00873,0.00625,0.00446,0.00317,0.00225,0.00159,0.00112,0.00079] },
+      { label: 'joint MLE fit',   colorVar: '--series-10', r2: 0.960, values: [0.0,0.0,0.26554,0.1984,0.14696,0.10805,0.07893,0.05733,0.04144,0.02982,0.02137,0.01526,0.01086,0.00771,0.00545,0.00385,0.00271,0.0019,0.00134,0.00093,0.00065] },
+      { label: 'joint weighted fit', colorVar: '--series-9', r2: 0.975, values: [0.0,0.0,0.25001,0.1956,0.14952,0.11222,0.08299,0.06061,0.04381,0.03138,0.0223,0.01574,0.01104,0.00771,0.00535,0.0037,0.00255,0.00175,0.0012,0.00082,0.00056] },
+    ],
+  },
+  {
+    id: 'choice50branch',
+    title: 'Tokens accepted per call — seq-ptp-choice-50 (branching-process fit)',
+    subtitle: 'choice-50 per-call samples, n=3139 · vicuna checkpoint',
+    seriesVar: '--series-8',
+    formula: 'G = 1 + T,  T = extinction time of zero-inflated BetaBinomial(K=50, &alpha;,&beta;) branching process',
+    mean: 5.384, std: 3.220,
+    obs: [0.0,0.0,0.13571,0.18955,0.16948,0.13412,0.0978,0.08251,0.05957,0.03377,0.02294,0.02103,0.01529,0.01051,0.00605,0.00446,0.0035,0.00223,0.00159,0.00223,0.00765],
+    curves: [
+      { label: 'P(T=1) fit',      colorVar: '--series-5',  r2: 0.905, values: [0.0,0.0,0.13956,0.13461,0.1246,0.11145,0.09683,0.08206,0.06806,0.05538,0.04431,0.03493,0.02716,0.02086,0.01585,0.01192,0.00888,0.00656,0.00481,0.0035,0.00253] },
+      { label: 'E[T] fit',        colorVar: '--series-6',  r2: 0.886, values: [0.0,0.0,0.21333,0.17178,0.13716,0.10867,0.08547,0.06677,0.05184,0.04001,0.03071,0.02345,0.01782,0.01348,0.01015,0.00762,0.00569,0.00424,0.00314,0.00233,0.00171] },
+      { label: 'joint MLE fit',   colorVar: '--series-10', r2: 0.902, values: [0.0,0.0,0.20799,0.17223,0.13971,0.11148,0.08776,0.06832,0.05267,0.04027,0.03057,0.02305,0.01728,0.01289,0.00957,0.00707,0.00521,0.00382,0.00279,0.00203,0.00148] },
+      { label: 'joint weighted fit', colorVar: '--series-9', r2: 0.939, values: [0.0,0.0,0.17593,0.15801,0.13648,0.11443,0.09371,0.07527,0.05948,0.04635,0.03568,0.02718,0.0205,0.01534,0.01138,0.00839,0.00614,0.00447,0.00324,0.00233,0.00167] },
+    ],
+  },
+  {
+    id: 'seqn1000branch',
+    title: 'Tokens accepted per call — seq-n-ptp-choice-1000 (branching-process fit)',
+    subtitle: 'seq-n-choice-1000 per-call samples, n=2919, 100 held-out examples · vicuna checkpoint',
+    seriesVar: '--series-11',
+    formula: 'G = 1 + T,  T = extinction time of zero-inflated BetaBinomial(K=1000, &alpha;,&beta;) branching process',
+    mean: 5.861, std: 3.493,
+    obs: [0.0,0.0,0.10928,0.16684,0.15519,0.14012,0.10757,0.08222,0.05995,0.04899,0.03563,0.01884,0.0209,0.01336,0.00822,0.00651,0.00445,0.00719,0.00445,0.00103,0.00925],
+    curves: [
+      { label: 'P(T=1) fit',      colorVar: '--series-5',  r2: 0.797, values: [0.0,0.0,0.10711,0.1036,0.09906,0.0933,0.08643,0.07872,0.07051,0.06215,0.05394,0.04615,0.03896,0.03247,0.02674,0.02178,0.01755,0.01401,0.01108,0.00868,0.00675] },
+      { label: 'E[T] fit',        colorVar: '--series-6',  r2: 0.835, values: [0.0,0.0,0.1957,0.1597,0.12986,0.10521,0.08491,0.06825,0.05463,0.04356,0.03459,0.02736,0.02155,0.01692,0.01323,0.01031,0.008,0.00619,0.00477,0.00367,0.00281] },
+      { label: 'joint MLE fit',   colorVar: '--series-10', r2: 0.921, values: [0.0,0.0,0.15272,0.14191,0.12662,0.10969,0.0929,0.07727,0.06332,0.05125,0.04104,0.03256,0.02562,0.02002,0.01554,0.01199,0.0092,0.00702,0.00534,0.00404,0.00305] },
+      { label: 'joint weighted fit', colorVar: '--series-9', r2: 0.899, values: [0.0,0.0,0.12475,0.12293,0.11598,0.10578,0.09388,0.08145,0.06932,0.05802,0.04787,0.03899,0.03139,0.02501,0.01974,0.01545,0.01199,0.00924,0.00707,0.00538,0.00407] },
+    ],
+  },
+];
+
+const root = document.getElementById('root');
+const tooltip = document.getElementById('tooltip');
+const ns = 'http://www.w3.org/2000/svg';
+function el(tag, attrs) {
+  const e = document.createElementNS(ns, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  return e;
+}
+
+datasets.forEach(ds => {
+  const card = document.createElement('div');
+  card.className = 'card';
+
+  const cs = getComputedStyle(root);
+  const seriesColor = cs.getPropertyValue(ds.seriesVar).trim();
+  const mutedColor = cs.getPropertyValue('--text-muted').trim();
+
+  // ds.curves (4-fit panels) vs. the legacy single-fit 'base' panel.
+  const curves = ds.curves
+    ? ds.curves.map(c => ({ ...c, color: cs.getPropertyValue(c.colorVar).trim() }))
+    : [{ label: 'fitted Geometric', color: mutedColor, values: ds.pred }];
+
+  const formulaHtml = ds.formula
+    ? ds.formula
+    : `G = ${ds.shift} + Geometric(p) &nbsp;&middot;&nbsp; p&#770; = ${ds.p.toFixed(3)} &nbsp;&middot;&nbsp; R&sup2; = ${ds.r2.toFixed(3)}`;
+  const paramsFormula = ds.curves ? `<p class="formula">${sharedFitParams}</p>` : '';
+  const r2Formula = ds.curves
+    ? `<p class="formula">R&sup2; &mdash; ${curves.map(c => `${c.label}: ${c.r2.toFixed(3)}`).join(' &nbsp;&middot;&nbsp; ')}</p>`
+    : '';
+  const legendItems = curves.map(c =>
+    `<div class="legend-item"><span class="legend-swatch-line" style="border-color:${c.color}"></span>${c.label}</div>`
+  ).join('');
+
+  card.innerHTML = `
+    <h1>${ds.title}</h1>
+    <p class="subtitle">${ds.subtitle}</p>
+    <p class="formula">${formulaHtml}</p>
+    ${paramsFormula}
+    ${r2Formula}
+    <div class="legend">
+      <div class="legend-item"><span class="legend-swatch-bar" style="background:${seriesColor}"></span>observed</div>
+      ${legendItems}
+    </div>
+  `;
+
+  const svg = el('svg', { width: 696, height: 360 });
+  const W = 696, H = 360;
+  const margin = { top: 14, right: 14, bottom: 34, left: 40 };
+  const plotW = W - margin.left - margin.right;
+  const plotH = H - margin.top - margin.bottom;
+
+  const n = ds.obs.length;
+  const maxVal = Math.max(...ds.obs, ...[].concat(...curves.map(c => c.values)));
+  const yMax = Math.ceil(maxVal * 100 / 5) * 5 / 100;
+
+  const slot = plotW / n;
+  const barW = Math.min(24, slot - 4);
+  const xCenter = (i) => margin.left + slot * i + slot / 2;
+  const yScale = (v) => margin.top + plotH - (v / yMax) * plotH;
+
+  const yTicks = 5;
+  for (let i = 0; i <= yTicks; i++) {
+    const v = (yMax / yTicks) * i;
+    const y = yScale(v);
+    svg.appendChild(el('line', { x1: margin.left, x2: W - margin.right, y1: y, y2: y, class: 'gridline' }));
+    const t = el('text', { x: margin.left - 6, y: y + 3, class: 'axis-label', 'text-anchor': 'end' });
+    t.textContent = Math.round(v * 100) + '%';
+    svg.appendChild(t);
+  }
+  svg.appendChild(el('line', { x1: margin.left, x2: W - margin.right, y1: yScale(0), y2: yScale(0), class: 'baseline' }));
+
+  for (let i = 0; i < n; i++) {
+    const count = ds.obs[i];
+    const x = xCenter(i) - barW / 2;
+    const yTop = yScale(count);
+    const yBase = yScale(0);
+    const h = Math.max(0, yBase - yTop);
+    const r = h > 0 ? Math.min(4, h) : 0;
+    let d = '';
+    if (h > 0) {
+      d = `M ${x} ${yBase} L ${x} ${yTop + r} Q ${x} ${yTop} ${x + r} ${yTop} L ${x + barW - r} ${yTop} Q ${x + barW} ${yTop} ${x + barW} ${yTop + r} L ${x + barW} ${yBase} Z`;
+    }
+    const path = el('path', { d, fill: seriesColor });
+    path.addEventListener('mousemove', (ev) => {
+      const curveTxt = curves.map(c => ` &middot; ${c.label} ${(c.values[i]*100).toFixed(2)}%`).join('');
+      tooltip.innerHTML = `<div class="row"><span class="label">G=${i}</span><span class="val">obs ${(count*100).toFixed(2)}%${curveTxt}</span></div>`;
+      tooltip.style.opacity = 1;
+      tooltip.style.left = (ev.clientX + 14) + 'px';
+      tooltip.style.top = (ev.clientY - 10) + 'px';
+    });
+    path.addEventListener('mouseleave', () => tooltip.style.opacity = 0);
+    svg.appendChild(path);
+
+    if (i % 2 === 0 || i === n - 1) {
+      const lbl = el('text', { x: xCenter(i), y: yScale(0) + 16, class: 'axis-label', 'text-anchor': 'middle' });
+      lbl.textContent = `${i}`;
+      svg.appendChild(lbl);
+    }
+  }
+
+  for (const c of curves) {
+    let linePoints = '';
+    for (let i = 0; i < n; i++) linePoints += `${xCenter(i)},${yScale(c.values[i])} `;
+    svg.appendChild(el('polyline', { points: linePoints.trim(), class: 'model-line', stroke: c.color }));
+    for (let i = 0; i < n; i++) {
+      svg.appendChild(el('circle', { cx: xCenter(i), cy: yScale(c.values[i]), r: 3, fill: c.color, stroke: 'var(--surface-1)', 'stroke-width': 1.5 }));
+    }
+  }
+
+  const xTitle = el('text', { x: margin.left + plotW / 2, y: H - 4, class: 'axis-title', 'text-anchor': 'middle' });
+  xTitle.textContent = 'Tokens accepted per call (G)';
+  svg.appendChild(xTitle);
+
+  card.appendChild(svg);
+
+  const statRow = document.createElement('div');
+  statRow.className = 'stat-row';
+  if (ds.curves) {
+    statRow.innerHTML = `<div>mean = <b>${ds.mean.toFixed(3)}</b></div><div>std = <b>${ds.std.toFixed(3)}</b></div>`;
+  } else {
+    statRow.innerHTML = `<div>mean = <b>${ds.mean.toFixed(3)}</b></div><div>std = <b>${ds.std.toFixed(3)}</b></div><div>fitted p&#770; = <b>${ds.p.toFixed(3)}</b></div><div>R&sup2; = <b>${ds.r2.toFixed(3)}</b></div>`;
+  }
+  card.appendChild(statRow);
+
+  root.appendChild(card);
+});
+
+// --- P(T=1) vs k: real 100-question-run datasets only (k=1,2,5,50,1000) ---
+const kSweep = [
+  { k: 1,    p: 0.33446, n: 4159, label: 'seq-ptp' },
+  { k: 2,    p: 0.29196, n: 3843, label: 'choice-2' },
+  { k: 5,    p: 0.21025, n: 3472, label: 'choice-5' },
+  { k: 50,   p: 0.13571, n: 3139, label: 'choice-50' },
+  { k: 1000, p: 0.10928, n: 2919, label: 'seq-n-choice-1000' },
+];
+// Only these 5 k's have a real 100-question-run collection. The earlier version
+// of this panel also plotted a single-held-out-example sweep at k=3,4,10,20,250 —
+// removed, since mixing a one-example estimate with real histogram data made the
+// fits (and the panel) inconsistent with the E[G] panel and the joint fits below,
+// which only ever used these same 5 datasets.
+
+// Offset power-law fit: p(k) = c + a * k^(-b), least squares over these 5 points.
+const kFit = { c: 0.0934, a: 0.2477, b: 0.4295, r2: 0.991 };
+const fitP = (k) => kFit.c + kFit.a * Math.pow(k, -kFit.b);
+
+// Zero-inflated Beta-Binomial branching fit: P(T=1;K) = pi0 + (1-pi0)*BetaBinom(0;K,alpha,beta).
+// Binomial-likelihood MLE over the exact (k, successes, n) counts from these same 5 datasets.
+const branchFit = { pi0: 0.0946, p: 0.7257, rho: 0.6297, r2: 0.990 };
+// "E[T] fit": NLS against E[G] means from the FIVE 100-question-run datasets only
+// (seq-ptp K=1, choice-2 K=2, choice-5 K=5, choice-50 K=50, seq-n-choice-1000 K=1000) —
+// no disk-table / single-example data used here.
+const branchFitDisk = { pi0: 0.1882, p: 0.8375, rho: 0.6745, r2: 0.999 };
+// Joint fit sharing (pi0,p,rho) across all 5 real per-call histogram datasets
+// (seq-ptp K=1, choice-2 K=2, choice-5 K=5, choice-50 K=50, seq-n-choice-1000 K=1000), two ways.
+const branchFitJointW = { pi0: 0.0737, p: 0.7093, rho: 0.7539 };   // weighted (G=2..5 priority)
+const branchFitJointM = { pi0: 0.0000, p: 0.6754, rho: 0.8679 };   // standard MLE (unweighted)
+// Lanczos approximation for ln(Gamma(x)), lets P(S=0) extend to non-integer k for a smooth curve.
+const LANCZOS_G = 7;
+const LANCZOS_C = [
+  0.99999999999980993, 676.5203681218851, -1259.1392167224028,
+  771.32342877765313, -176.61502916214059, 12.507343278686905,
+  -0.13857109526572012, 9.9843695780195716e-6, 1.5056327351493116e-7,
+];
+function lnGamma(x) {
+  if (x < 0.5) return Math.log(Math.PI / Math.sin(Math.PI * x)) - lnGamma(1 - x);
+  x -= 1;
+  let a = LANCZOS_C[0];
+  const t = x + LANCZOS_G + 0.5;
+  for (let i = 1; i < LANCZOS_G + 2; i++) a += LANCZOS_C[i] / (x + i);
+  return 0.5 * Math.log(2 * Math.PI) + (x + 0.5) * Math.log(t) - t + Math.log(a);
+}
+function betaBinomZeroPmf(m, alpha, beta) {
+  // P(S=0; m,alpha,beta) = B(alpha,beta+m)/B(alpha,beta), via lnGamma so m need not be an integer.
+  const lnRatio = (lnGamma(beta + m) - lnGamma(beta)) + (lnGamma(alpha + beta) - lnGamma(alpha + beta + m));
+  return Math.exp(lnRatio);
+}
+function fitBranch(k) {
+  const nu = (1 - branchFit.rho) / branchFit.rho;
+  const alpha = branchFit.p * nu, beta = (1 - branchFit.p) * nu;
+  return branchFit.pi0 + (1 - branchFit.pi0) * betaBinomZeroPmf(k, alpha, beta);
+}
+function fitBranchDisk(k) {
+  const nu = (1 - branchFitDisk.rho) / branchFitDisk.rho;
+  const alpha = branchFitDisk.p * nu, beta = (1 - branchFitDisk.p) * nu;
+  return branchFitDisk.pi0 + (1 - branchFitDisk.pi0) * betaBinomZeroPmf(k, alpha, beta);
+}
+function fitBranchJointW(k) {
+  const nu = (1 - branchFitJointW.rho) / branchFitJointW.rho;
+  const alpha = branchFitJointW.p * nu, beta = (1 - branchFitJointW.p) * nu;
+  return branchFitJointW.pi0 + (1 - branchFitJointW.pi0) * betaBinomZeroPmf(k, alpha, beta);
+}
+function fitBranchJointM(k) {
+  const nu = (1 - branchFitJointM.rho) / branchFitJointM.rho;
+  const alpha = branchFitJointM.p * nu, beta = (1 - branchFitJointM.p) * nu;
+  return branchFitJointM.pi0 + (1 - branchFitJointM.pi0) * betaBinomZeroPmf(k, alpha, beta);
+}
+
+(function renderKSweep() {
+  const card = document.createElement('div');
+  card.className = 'card';
+
+  const cs = getComputedStyle(root);
+  const seriesColor = cs.getPropertyValue('--series-4').trim();
+  const branchColor = cs.getPropertyValue('--series-5').trim();
+  const branchDiskColor = cs.getPropertyValue('--series-6').trim();
+  const branchJointWColor = cs.getPropertyValue('--series-9').trim();
+  const branchJointMColor = cs.getPropertyValue('--series-10').trim();
+  const mutedColor = cs.getPropertyValue('--text-muted').trim();
+
+  card.innerHTML = `
+    <h1>P(T=1) — empirical one-step success-rate &amp; all branching-model fits</h1>
+    <p class="subtitle">vicuna checkpoint</p>
+    <p class="formula">phenomenological: p(k) = c + a&middot;k<sup>&minus;b</sup> &nbsp;&middot;&nbsp; c&#770;=${kFit.c.toFixed(3)}, a&#770;=${kFit.a.toFixed(3)}, b&#770;=${kFit.b.toFixed(3)} &nbsp;&middot;&nbsp; R&sup2;=${kFit.r2.toFixed(3)}</p>
+    <p class="formula">${sharedFitParams}</p>
+    <p class="formula">R&sup2; &mdash; P(T=1) fit: 0.990 &nbsp;&middot;&nbsp; E[T] fit: 0.587 &nbsp;&middot;&nbsp; joint MLE fit: 0.727 &nbsp;&middot;&nbsp; joint weighted fit: 0.906</p>
+    <div class="legend">
+      <div class="legend-item"><span class="legend-swatch-bar" style="background:${seriesColor}"></span>observed</div>
+      <div class="legend-item"><span class="legend-swatch-line" style="border-color:${mutedColor}"></span>offset power law</div>
+      <div class="legend-item"><span class="legend-swatch-line" style="border-color:${branchColor}"></span>P(T=1) fit</div>
+      <div class="legend-item"><span class="legend-swatch-line" style="border-color:${branchDiskColor}"></span>E[T] fit</div>
+      <div class="legend-item"><span class="legend-swatch-line" style="border-color:${branchJointMColor}"></span>joint MLE fit</div>
+      <div class="legend-item"><span class="legend-swatch-line" style="border-color:${branchJointWColor}"></span>joint weighted fit</div>
+    </div>
+  `;
+
+  const svg = el('svg', { width: 696, height: 360 });
+  const W = 696, H = 360;
+  const margin = { top: 14, right: 20, bottom: 34, left: 44 };
+  const plotW = W - margin.left - margin.right;
+  const plotH = H - margin.top - margin.bottom;
+
+  const logMin = 0;              // log10(1)
+  const logMax = Math.log10(1000);
+  const xScale = (k) => margin.left + (Math.log10(k) - logMin) / (logMax - logMin) * plotW;
+
+  const maxVal = Math.max(...kSweep.map(d => d.p), fitP(1), fitBranch(1), fitBranchDisk(1), fitBranchJointM(1), fitBranchJointW(1));
+  const yMax = Math.ceil(maxVal * 100 / 5) * 5 / 100;
+  const yScale = (v) => margin.top + plotH - (v / yMax) * plotH;
+
+  const yTicks = 5;
+  for (let i = 0; i <= yTicks; i++) {
+    const v = (yMax / yTicks) * i;
+    const y = yScale(v);
+    svg.appendChild(el('line', { x1: margin.left, x2: W - margin.right, y1: y, y2: y, class: 'gridline' }));
+    const t = el('text', { x: margin.left - 6, y: y + 3, class: 'axis-label', 'text-anchor': 'end' });
+    t.textContent = Math.round(v * 100) + '%';
+    svg.appendChild(t);
+  }
+  svg.appendChild(el('line', { x1: margin.left, x2: W - margin.right, y1: yScale(0), y2: yScale(0), class: 'baseline' }));
+
+  // x-axis ticks at the actual k values sampled
+  const tickKs = [1, 2, 5, 50, 1000];
+  for (const tk of tickKs) {
+    const x = xScale(tk);
+    const lbl = el('text', { x, y: yScale(0) + 16, class: 'axis-label', 'text-anchor': 'middle' });
+    lbl.textContent = `${tk}`;
+    svg.appendChild(lbl);
+  }
+
+  // Fitted curves: dense smooth polylines in log(k) space.
+  const nCurve = 80;
+  let curvePoints = '', branchPoints = '', branchDiskPoints = '', branchJointMPoints = '', branchJointWPoints = '';
+  for (let i = 0; i <= nCurve; i++) {
+    const logK = logMin + (logMax - logMin) * (i / nCurve);
+    const k = Math.pow(10, logK);
+    curvePoints += `${xScale(k)},${yScale(fitP(k))} `;
+    branchPoints += `${xScale(k)},${yScale(fitBranch(k))} `;
+    branchDiskPoints += `${xScale(k)},${yScale(fitBranchDisk(k))} `;
+    branchJointMPoints += `${xScale(k)},${yScale(fitBranchJointM(k))} `;
+    branchJointWPoints += `${xScale(k)},${yScale(fitBranchJointW(k))} `;
+  }
+  svg.appendChild(el('polyline', { points: curvePoints.trim(), class: 'model-line', stroke: mutedColor }));
+  svg.appendChild(el('polyline', { points: branchPoints.trim(), class: 'model-line', stroke: branchColor }));
+  svg.appendChild(el('polyline', { points: branchDiskPoints.trim(), class: 'model-line', stroke: branchDiskColor }));
+  svg.appendChild(el('polyline', { points: branchJointMPoints.trim(), class: 'model-line', stroke: branchJointMColor }));
+  svg.appendChild(el('polyline', { points: branchJointWPoints.trim(), class: 'model-line', stroke: branchJointWColor }));
+
+  // Observed points.
+  for (const d of kSweep) {
+    const cx = xScale(d.k), cy = yScale(d.p);
+    const dot = el('circle', { cx, cy, r: 5, fill: seriesColor, stroke: 'var(--surface-1)', 'stroke-width': 2 });
+    dot.addEventListener('mousemove', (ev) => {
+      tooltip.innerHTML = `<div class="row"><span class="label">${d.label} (k=${d.k})</span><span class="val">obs ${(d.p*100).toFixed(1)}% &middot; power-law ${(fitP(d.k)*100).toFixed(1)}% &middot; P(T=1) fit ${(fitBranch(d.k)*100).toFixed(1)}% &middot; E[T] fit ${(fitBranchDisk(d.k)*100).toFixed(1)}% &middot; joint MLE ${(fitBranchJointM(d.k)*100).toFixed(1)}% &middot; joint weighted ${(fitBranchJointW(d.k)*100).toFixed(1)}% &middot; n=${d.n}</span></div>`;
+      tooltip.style.opacity = 1;
+      tooltip.style.left = (ev.clientX + 14) + 'px';
+      tooltip.style.top = (ev.clientY - 10) + 'px';
+    });
+    dot.addEventListener('mouseleave', () => tooltip.style.opacity = 0);
+    svg.appendChild(dot);
+  }
+
+  // Fitted-value markers at the same sampled k's (small, distinguishes fit-at-k from the smooth curve).
+  for (const d of kSweep) {
+    svg.appendChild(el('circle', { cx: xScale(d.k), cy: yScale(fitP(d.k)), r: 3, fill: mutedColor, stroke: 'var(--surface-1)', 'stroke-width': 1.5 }));
+    svg.appendChild(el('circle', { cx: xScale(d.k), cy: yScale(fitBranch(d.k)), r: 3, fill: branchColor, stroke: 'var(--surface-1)', 'stroke-width': 1.5 }));
+    svg.appendChild(el('circle', { cx: xScale(d.k), cy: yScale(fitBranchDisk(d.k)), r: 3, fill: branchDiskColor, stroke: 'var(--surface-1)', 'stroke-width': 1.5 }));
+    svg.appendChild(el('circle', { cx: xScale(d.k), cy: yScale(fitBranchJointM(d.k)), r: 3, fill: branchJointMColor, stroke: 'var(--surface-1)', 'stroke-width': 1.5 }));
+    svg.appendChild(el('circle', { cx: xScale(d.k), cy: yScale(fitBranchJointW(d.k)), r: 3, fill: branchJointWColor, stroke: 'var(--surface-1)', 'stroke-width': 1.5 }));
+  }
+
+  const xTitle = el('text', { x: margin.left + plotW / 2, y: H - 4, class: 'axis-title', 'text-anchor': 'middle' });
+  xTitle.textContent = 'choice-k (log scale)';
+  svg.appendChild(xTitle);
+
+  card.appendChild(svg);
+
+  const statRow = document.createElement('div');
+  statRow.className = 'stat-row';
+  statRow.innerHTML = `<div>power-law: c&#770;=<b>${kFit.c.toFixed(3)}</b>, a&#770;=<b>${kFit.a.toFixed(3)}</b>, b&#770;=<b>${kFit.b.toFixed(3)}</b>, R&sup2;=<b>${kFit.r2.toFixed(3)}</b></div>`;
+  card.appendChild(statRow);
+
+  const statRow2 = document.createElement('div');
+  statRow2.className = 'stat-row';
+  statRow2.innerHTML = `<div>P(T=1) fit: &pi;&#770;&#8320;=<b>${branchFit.pi0.toFixed(3)}</b>, p&#770;=<b>${branchFit.p.toFixed(3)}</b>, &rho;&#770;=<b>${branchFit.rho.toFixed(3)}</b>, R&sup2;=<b>${branchFit.r2.toFixed(3)}</b></div>`;
+  card.appendChild(statRow2);
+
+  const statRow3 = document.createElement('div');
+  statRow3.className = 'stat-row';
+  statRow3.innerHTML = `<div>E[T] fit: &pi;&#770;&#8320;=<b>${branchFitDisk.pi0.toFixed(3)}</b>, p&#770;=<b>${branchFitDisk.p.toFixed(3)}</b>, &rho;&#770;=<b>${branchFitDisk.rho.toFixed(3)}</b>, R&sup2;=<b>${branchFitDisk.r2.toFixed(3)}</b></div>`;
+  card.appendChild(statRow3);
+
+  root.appendChild(card);
+})();
+
+// --- k vs E[G] = 1 + E[T]: empirical means + all four branching-model predictions ---
+const egEmpirical = [
+  { k: 1,    eg: 4.121, n: 4159, label: 'seq-ptp' },
+  { k: 2,    eg: 4.423, n: 3843, label: 'choice-2' },
+  { k: 5,    eg: 4.823, n: 3472, label: 'choice-5' },
+  { k: 50,   eg: 5.384, n: 3139, label: 'choice-50' },
+  { k: 1000, eg: 5.861, n: 2919, label: 'seq-n-choice-1000' },
+];
+// Note: no k=250 point — only a disk-table estimate exists there, not an
+// actual 100-question-run collection, so it's omitted rather than shown
+// alongside real per-call histogram means.
+
+(function renderEG() {
+  const card = document.createElement('div');
+  card.className = 'card';
+
+  const cs = getComputedStyle(root);
+  const seriesColor = cs.getPropertyValue('--series-4').trim();
+  const branchColor = cs.getPropertyValue('--series-5').trim();
+  const branchDiskColor = cs.getPropertyValue('--series-6').trim();
+  const branchJointWColor = cs.getPropertyValue('--series-9').trim();
+  const branchJointMColor = cs.getPropertyValue('--series-10').trim();
+
+  card.innerHTML = `
+    <h1>E[G] = 1 + E[T] vs k — empirical means &amp; all branching-model fits</h1>
+    <p class="subtitle">vicuna checkpoint</p>
+    <p class="formula">${sharedFitParams}</p>
+    <p class="formula">R&sup2; &mdash; P(T=1) fit: -1.284 &nbsp;&middot;&nbsp; E[T] fit: 0.999 &nbsp;&middot;&nbsp; joint MLE fit: 0.883 &nbsp;&middot;&nbsp; joint weighted fit: 0.388</p>
+    <div class="legend">
+      <div class="legend-item"><span class="legend-swatch-bar" style="background:${seriesColor}"></span>empirical mean</div>
+      <div class="legend-item"><span class="legend-swatch-line" style="border-color:${branchColor}"></span>P(T=1) fit</div>
+      <div class="legend-item"><span class="legend-swatch-line" style="border-color:${branchDiskColor}"></span>E[T] fit</div>
+      <div class="legend-item"><span class="legend-swatch-line" style="border-color:${branchJointMColor}"></span>joint MLE fit</div>
+      <div class="legend-item"><span class="legend-swatch-line" style="border-color:${branchJointWColor}"></span>joint weighted fit</div>
+    </div>
+  `;
+
+  const svg = el('svg', { width: 696, height: 380 });
+  const W = 696, H = 380;
+  const margin = { top: 14, right: 20, bottom: 34, left: 44 };
+  const plotW = W - margin.left - margin.right;
+  const plotH = H - margin.top - margin.bottom;
+
+  const logMin = 0, logMax = Math.log10(1000);
+  const xScale = (k) => margin.left + (Math.log10(k) - logMin) / (logMax - logMin) * plotW;
+
+  // Precomputed (Python, exact finite-state DP) E[G]=1+E[T] curves — avoids an
+  // expensive in-browser (K+1)x(K+1) matrix build for K up to 1000.
+  const egCurveKs = [1,2,3,5,7,10,15,20,30,50,70,100,150,200,300,500,700,1000];
+  const egCurves = {
+    branchFit:       [3.916,4.391,4.6648,5.0016,5.2173,5.44,5.6852,5.8541,6.0846,6.3628,6.5387,6.7189,6.9161,7.0512,7.2351,7.4562,7.5957,7.7385],
+    branchFitDisk:   [4.1235,4.4389,4.6025,4.7887,4.9002,5.0096,5.1237,5.1986,5.2963,5.4073,5.4737,5.5388,5.6067,5.6513,5.7093,5.7753,5.8147,5.8534],
+    branchFitJointM: [4.0811,4.3336,4.472,4.6406,4.7492,4.863,4.9912,5.0816,5.2085,5.3678,5.4726,5.5835,5.7094,5.7987,5.9246,6.0831,6.1875,6.2981],
+    branchFitJointW: [3.9152,4.2665,4.464,4.7057,4.8609,5.0225,5.2025,5.3281,5.5021,5.7166,5.8551,5.9996,6.1609,6.2735,6.4297,6.6222,6.7466,6.8763],
+  };
+
+  const allVals = [].concat(...Object.values(egCurves), egEmpirical.map(d => d.eg));
+  const yMin = Math.floor(Math.min(...allVals) * 2) / 2;
+  const yMax = Math.ceil(Math.max(...allVals) * 2) / 2;
+  const yScale = (v) => margin.top + plotH - (v - yMin) / (yMax - yMin) * plotH;
+
+  const yTicks = Math.round(yMax - yMin);
+  for (let i = 0; i <= yTicks; i++) {
+    const v = yMin + i;
+    if (v > yMax) break;
+    const y = yScale(v);
+    svg.appendChild(el('line', { x1: margin.left, x2: W - margin.right, y1: y, y2: y, class: 'gridline' }));
+    const t = el('text', { x: margin.left - 6, y: y + 3, class: 'axis-label', 'text-anchor': 'end' });
+    t.textContent = v.toFixed(0);
+    svg.appendChild(t);
+  }
+
+  const tickKs = [1, 2, 5, 10, 20, 50, 100, 1000];
+  for (const tk of tickKs) {
+    const lbl = el('text', { x: xScale(tk), y: yScale(yMin) + 16, class: 'axis-label', 'text-anchor': 'middle' });
+    lbl.textContent = `${tk}`;
+    svg.appendChild(lbl);
+  }
+
+  const curveColors = {
+    branchFit: branchColor, branchFitDisk: branchDiskColor,
+    branchFitJointW: branchJointWColor, branchFitJointM: branchJointMColor,
+  };
+  for (const [name, vals] of Object.entries(egCurves)) {
+    let pts = '';
+    for (let i = 0; i < egCurveKs.length; i++) pts += `${xScale(egCurveKs[i])},${yScale(vals[i])} `;
+    svg.appendChild(el('polyline', { points: pts.trim(), class: 'model-line', stroke: curveColors[name] }));
+  }
+
+  for (const d of egEmpirical) {
+    const cx = xScale(d.k), cy = yScale(d.eg);
+    const dot = el('circle', { cx, cy, r: 5, fill: seriesColor, stroke: 'var(--surface-1)', 'stroke-width': 2 });
+    dot.addEventListener('mousemove', (ev) => {
+      tooltip.innerHTML = `<div class="row"><span class="label">${d.label}</span><span class="val">k=${d.k} &middot; E[G]=${d.eg.toFixed(3)} &middot; n=${d.n}</span></div>`;
+      tooltip.style.opacity = 1;
+      tooltip.style.left = (ev.clientX + 14) + 'px';
+      tooltip.style.top = (ev.clientY - 10) + 'px';
+    });
+    dot.addEventListener('mouseleave', () => tooltip.style.opacity = 0);
+    svg.appendChild(dot);
+  }
+
+  const xTitle = el('text', { x: margin.left + plotW / 2, y: H - 4, class: 'axis-title', 'text-anchor': 'middle' });
+  xTitle.textContent = 'choice-k (log scale)';
+  svg.appendChild(xTitle);
+
+  const yTitle = el('text', {
+    x: -(margin.top + plotH / 2), y: 14, class: 'axis-title', 'text-anchor': 'middle',
+    transform: 'rotate(-90)',
+  });
+  yTitle.textContent = 'E[G] = 1 + E[T]';
+  svg.appendChild(yTitle);
+
+  card.appendChild(svg);
+  root.appendChild(card);
+})();
+</script>

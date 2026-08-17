@@ -19,3 +19,6 @@ example_sample_dataloader.py
 test_max_batch_size.py
 
 checkpoints/.cache/
+
+.idea/
+plot.png

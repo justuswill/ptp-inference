@@ -18,6 +18,8 @@ from ptp.data.sampler import CoordinatedCompletionSampler
 
 
 def seq_len_before_eos(input_ids, eos_token_id):
+    if eos_token_id is None:
+        return input_ids.shape[0]
     is_eos: torch.Tensor = input_ids == eos_token_id
     if is_eos.all():
         return 0
@@ -150,6 +152,8 @@ class PregeneratedDataset(torch.utils.data.Dataset):
 
         comp_idx    = random.randint(0, len(completions) - 1)
         comp_ids    = completions[comp_idx]
+        if not isinstance(comp_ids, torch.Tensor):
+            comp_ids = torch.tensor(comp_ids)
 
         if self.right_truncate_eos:
             valid_len = max(seq_len_before_eos(comp_ids, self.eos_token_id) + 1, 1)
@@ -158,6 +162,8 @@ class PregeneratedDataset(torch.utils.data.Dataset):
         comp_ids = comp_ids[:valid_len]
 
         prompt_ids = entry[self.prompt_name]
+        if not isinstance(prompt_ids, torch.Tensor):
+            prompt_ids = torch.tensor(prompt_ids)
         input_ids  = torch.cat([prompt_ids, comp_ids])
 
         out = {"input_ids": input_ids}
@@ -189,7 +195,9 @@ class PregeneratedDataModule(LightningDataModule):
         self.max_sequence_length  = max_sequence_length
         self.experiment_dir       = experiment_dir
         if isinstance(tokenizer, str):
-            tokenizer = AutoTokenizer.from_pretrained(tokenizer)
+            tokenizer = AutoTokenizer.from_pretrained(tokenizer, trust_remote_code=True)
+        if tokenizer.eos_token_id is None and tokenizer.sep_token_id is not None:
+            tokenizer.eos_token_id = tokenizer.sep_token_id
         self.tokenizer         = tokenizer
         self.eos_token_id      = tokenizer.eos_token_id
         self.right_truncate_eos = right_truncate_eos
