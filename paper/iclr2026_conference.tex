@@ -64,16 +64,45 @@ Together, our improvements yield up to 10 tokens per call across a wide range of
     \item proposal of parallizaton (apple, PTP)
 \end{itemize}
 
-Autoregressive decoding emits one token per forward pass. A multi-token model
-breaks that constraint by proposing several tokens at once, but a proposal is not
-an output: something must decide which of the proposed tokens are kept. That
-decision --- the \emph{acceptance rule} --- is usually treated as a fixed
-implementation detail, inherited from speculative
-decoding~\citep{leviathan2023speculative,chen2023accelerating}, where it is
-chosen to leave the base model's output distribution exactly intact. Once the
-proposal mechanism is strong enough to offer many coherent tokens per call, that
-choice stops being incidental. It sets the throughput, and it sets how far the
-generated text drifts from what the base model would have produced.
+Autoregressive decoding emits one token per forward pass. The autoregressive
+model is therefore both the bottleneck and the reference: it sets the latency of
+a deployed language model, and it defines what the output is supposed to be,
+since any method that accelerates it is judged by whether it still produces what
+that model would have produced.
+
+A long line of work accelerates that reference without replacing it. Speculative
+decoding drafts with a small autoregressive model and verifies the draft against
+the target~\citep{leviathan2023speculative,chen2023accelerating}; later methods
+make the drafter cheaper by attaching extra decoding heads to the target
+itself~\citep{stern2018blockwise,cai2024medusa,ankner2024hydra,li2024eagle}, or
+drop the drafter entirely and retrieve candidate continuations from the
+prompt~\citep{saxena2023pld}. Multi-token prediction pushes hardest on the
+proposal, training a single model to emit several coordinated tokens per
+call~\citep{gloeckle2024multitoken,draxler2025ptp}. Task-average speedups near
+$2.4\times$, approaching $3\times$ on the most favourable task categories, are
+now routine on diverse-task benchmarks~\citep{xia2024specbench}.
+
+A multi-token model breaks the one-token-per-pass constraint by proposing several
+tokens at once, but a proposal is not an output: something must decide which of
+the proposed tokens are kept. That decision --- the \emph{acceptance rule} --- is
+usually treated as a fixed implementation detail, inherited from speculative
+decoding, where it is chosen to leave the base model's output distribution
+exactly intact.
+
+That exactness is already being traded away. Medusa~\citep{cai2024medusa} argues
+that matching the base model's distribution is typically unnecessary and instead
+accepts any token the base model finds sufficiently plausible, a rule
+Hydra~\citep{ankner2024hydra} inherits. The trade is real and it is large: on our
+checkpoint, switching the predicate from exact matching to nucleus membership at
+$\theta = 0.98$ and changing nothing else raises committed tokens per call from
+$3.63$ to $4.30$ and wall-clock speedup from $1.02\times$ to $1.70\times$, while
+the mean probability the base model assigns to the generated tokens falls by
+$17$ points. Once the proposal mechanism is strong enough to offer many coherent
+tokens per call, the acceptance rule stops being an implementation detail: it
+sets the throughput, and it sets how far the generated text drifts from what the
+base model would have produced. Yet it is chosen by convention and reported by
+nobody --- the standard protocol measures accepted tokens per call and speedup,
+never faithfulness.
 
 This paper takes the decoding layer as the object of study. We ask the question
 a practitioner actually faces: \emph{on a single GPU, what is the lowest latency
@@ -94,7 +123,8 @@ the extinction time of a branching process, which makes the expected yield
 separable across depth and the allocation problem exactly solvable.
 
 \textbf{Parallelization.} Verification and the next proposal can run
-concurrently if one speculates on the verification outcome. Partial Quadratic
+concurrently if one speculates on the verification outcome, which recent work
+has begun to exploit~\citep{samragh2025future,draxler2025ptp}. Partial Quadratic
 Decoding (PQD)~\citep{draxler2025ptp} does this by preparing a branch for each
 possible number of correct tokens and spending a budget across those branches. We
 show that the branch weights and the value of a branch can be read off the same
@@ -362,8 +392,9 @@ and strictly where it is confident. Our exact rule has no baseline analogue,
 because it needs the auxiliary-variable coupling of \S\ref{sec:background};
 speculative sampling reaches the same guarantee by a different mechanism.
 
-\textbf{Parallelization.} Lookahead is the fused-pass row; Partial Quadratic
-Decoding is the budgeted-branch row. \S\ref{sec:pqd} shows that the branch
+\textbf{Parallelization.} Lookahead is the fused-pass row; quadratic
+decoding~\citep{samragh2025future} and its budgeted variant, Partial Quadratic
+Decoding~\citep{draxler2025ptp}, are the last two. \S\ref{sec:pqd} shows that the branch
 weights and branch values PQD needs are both readable off the same survival
 function that solves the geometry problem, which removes the two separately
 calibrated estimates the original formulation requires.
@@ -705,8 +736,10 @@ accepted-tokens-per-call.
 
 \textbf{Only the exact rules are faithful.} The $z$-test separates the two
 classes cleanly: $p_{\mathrm{align}} = 0.25$ and $0.80$ for exact PTP, versus
-$< 0.001$ for every relaxed rule. Broadening to nucleus $\theta = 0.98$ costs
-$16.6$ points of $\bar q$ ($84.5 \to 67.6$) to gain $1.9$ tokens per call.
+$< 0.001$ for every relaxed rule. Broadening the predicate from exact matching to
+nucleus $\theta = 0.98$ on the same sequential driver gains $0.67$ tokens per
+call and $0.68\times$ in speedup, and costs $17.1$ points of $\bar q$
+($84.7 \to 67.6$).
 
 \textbf{Cheap rules are bad rules.} Student-confidence thresholding needs no
 base-model call, and is the worst rule in the table on every axis at once: at
@@ -843,7 +876,8 @@ faithfulness, which \S\ref{sec:exp:rules} shows is where the rules actually
 differ. Allocation under a draft budget is treated heuristically throughout ---
 EAGLE-2's greedy expansion is the most explicit version, and it assumes
 independence between sibling nodes. PTP~\citep{draxler2025ptp} supplies the
-proposal mechanism and Partial Quadratic Decoding we build on; the connection
+proposal mechanism we build on, and Partial Quadratic Decoding, which budgets the
+quadratic expansion of~\citet{samragh2025future}; the connection
 between auxiliary variables and inverse autoregressive
 flows~\citep{kingma2016iaf} is noted there. Our branching model is a
 zero-inflated, shared-frailty Galton--Watson process~\citep{athreya1972branching}.
