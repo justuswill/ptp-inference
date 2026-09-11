@@ -5,6 +5,7 @@
 \input{math_commands.tex}
 
 \usepackage{hyperref}
+\usepackage{cleveref}
 \usepackage{url}
 
 \usepackage{amsmath}
@@ -16,6 +17,16 @@
 \usepackage{xspace}
 \usepackage{algorithm}
 \usepackage{algpseudocode}
+
+\newcommand{\note}[1]{\textcolor{red}{#1}}
+\makeatletter
+\newenvironment{ai}
+  {\color{lightgray}%
+   \@ifpackageloaded{caption}{\captionsetup{font={color=lightgray}}}{}%
+   \let\ai@savedfloatreset\@floatboxreset
+   \g@addto@macro\@floatboxreset{\color{lightgray}}}
+  {\global\let\@floatboxreset\ai@savedfloatreset}
+\makeatother
 
 \input{macros.tex}
 
@@ -53,14 +64,13 @@ We study this decoding layer directly, treating the multi-token model as a black
 Together, our improvements yield up to 10 tokens per call across a wide range of applications on several pretrained models, a 200\% increase over recent methods, unlocking the full low-latency potential of inference on these models.
 \end{abstract}
 
+\begin{ai}
 \section{Introduction}
 
 \begin{itemize}
     \item AR LLM are the base of modern inference
     \item many methods to speed up including small draft models. MTP/PTP improves up to 3x.
-    \item design choices have been
-    \item focused on exactly replicating teacher
-    \item if not now a trade-off (example p-threshold)
+    \item design choices have been focused on exactly replicating teacher, if not biased trade-off (example p-threshold)
     \item proposal of parallizaton (apple, PTP)
 \end{itemize}
 
@@ -246,19 +256,6 @@ axis-aligned rectangles and therefore mismatches over a large area.
   \label{fig:partition}
 \end{figure}
 
-\section{The design space of multi-token decoding}
-\label{sec:design}
-
-A multi-token decoder is fixed by three choices: which proposals count as
-acceptable, what shape the proposals take, and what runs concurrently with
-verification. Existing methods each occupy one point in that space, usually
-without naming the space. Table~\ref{tab:baselines} places the Spec-Bench
-baselines; Tables~\ref{tab:verification}--\ref{tab:parallel} enumerate the
-options along each axis. Our own system is one further point, but the
-contribution we care about is the space itself: once the three axes are
-separated, most published designs are recognizable as special cases, and the
-choices nobody has tried become visible.
-
 \begin{table}[t]
   \centering
   \caption{The Spec-Bench baselines, resolved along the three axes. ``guarantee''
@@ -269,6 +266,43 @@ choices nobody has tried become visible.
   proposal model's, $c_j$ its confidence at node $j$, $H$ the entropy.}
   \label{tab:baselines}
   \input{tab/baselines}
+\end{table}
+\end{ai}
+
+\section{The design space of multi-token decoding}
+\label{sec:design}
+
+Any multi-token decoder is characterized three main design choices: how tokens are proposed, what shape the proposal has, and which tokens get accepted into the context. The prediction model is then completed by choosing the pretrained model, the AR reference to align with, and whether any further optimizations, including call parallelization is applied.
+Existing design choices are described below and existing methods are summarized in \Cref{tab:baselines}.
+
+\subsection{Proposal Source}
+\label{sec:proposal}
+
+The framework used to sample multiple tokens in each call, builds core of each multi-token decoder. This usually involves architectural changes, training additional parameters, or finetuning the existing model. Although we will treat the proposal mechanism largely as a black-box, we will briefly describe some possible choices, summarized in \Cref{tab:}
+
+\begin{ai}
+
+\subsection{Proposal geometry: how many chances, and how long}
+\label{sec:geometry}
+
+Given a budget of $\budget$ proposal nodes per call, the geometry question is how
+to spend it: one long continuation, many short ones, or a tree. Every choice is
+summarized by a \emph{width profile} $\width(d)$, the number of proposal strands
+still alive at depth $d$ (\S\ref{sec:knapsack} makes this precise), and
+Table~\ref{tab:geometry} classifies the options by how that profile is picked.
+The column that matters is the last but one: whether the allocation accounts for
+\emph{correlation} between strands. Failures are not independent --- some
+positions are hard for every strand at once --- and \S\ref{sec:model} shows this
+is what makes width saturate.
+
+\begin{table}[t]
+  \centering
+  \caption{Proposal geometries. ``correlated'' is whether the allocation rule
+  models dependence between sibling strands rather than treating per-node
+  acceptance as independent. $\Sfun[w,d]$ is the survival function of
+  \S\ref{sec:model}.}
+  \label{tab:geometry}
+  \input{tab/aspect_geometry}
 \end{table}
 
 \subsection{Verification: what counts as acceptable}
@@ -323,29 +357,6 @@ eleven behind a single code path, so two runs differ only in the predicate.
   setting; we evaluate all eleven in \S\ref{sec:experiments}.}
   \label{tab:verification}
   \input{tab/aspect_verification}
-\end{table}
-
-\subsection{Proposal geometry: how many chances, and how long}
-\label{sec:geometry}
-
-Given a budget of $\budget$ proposal nodes per call, the geometry question is how
-to spend it: one long continuation, many short ones, or a tree. Every choice is
-summarized by a \emph{width profile} $\width(d)$, the number of proposal strands
-still alive at depth $d$ (\S\ref{sec:knapsack} makes this precise), and
-Table~\ref{tab:geometry} classifies the options by how that profile is picked.
-The column that matters is the last but one: whether the allocation accounts for
-\emph{correlation} between strands. Failures are not independent --- some
-positions are hard for every strand at once --- and \S\ref{sec:model} shows this
-is what makes width saturate.
-
-\begin{table}[t]
-  \centering
-  \caption{Proposal geometries. ``correlated'' is whether the allocation rule
-  models dependence between sibling strands rather than treating per-node
-  acceptance as independent. $\Sfun[w,d]$ is the survival function of
-  \S\ref{sec:model}.}
-  \label{tab:geometry}
-  \input{tab/aspect_geometry}
 \end{table}
 
 \subsection{Parallelization: what overlaps verification}
@@ -907,6 +918,7 @@ be penalized by $p_{\mathrm{align}}$ exactly as one that drifts towards worse. T
 fitted $(\pizero, p, \rhoc)$ is depth-uniform and checkpoint-specific, and its
 extrapolation degrades at $K = 1000$. The ratio-rule anomaly of
 \S\ref{sec:exp:rules} is unresolved.
+\end{ai}
 
 \bibliography{iclr2026_conference}
 \bibliographystyle{iclr2026_conference}
