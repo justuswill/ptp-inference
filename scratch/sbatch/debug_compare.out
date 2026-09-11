@@ -1,0 +1,38 @@
+Loading checkpoint: /extra/ucibdl1/jcwill/ptp/checkpoints/vicuna_old/last.ckpt
+Loading weights:   0%|          | 0/291 [00:00<?, ?it/s]Loading weights: 100%|██████████| 291/291 [00:00<00:00, 16019.93it/s]
+The following generation flags are not valid and may be ignored: ['temperature', 'top_p']. Set `TRANSFORMERS_VERBOSITY=info` for more details.
+Applying LoRA adapters
+Loading hist_base from cache: /extra/ucibdl1/jcwill/ptp/checkpoints/vicuna/correct_count_hist.pt
+
+======================== PROMPT 0 ========================
+
+seq-ptp-self-tok: correct_per_call=2.649 num_calls=57
+  per-round accepted (first 20): [1, 4, 2, 2, 2, 3, 4, 4, 2, 2, 10, 2, 2, 3, 5, 2, 3, 4, 4, 2]
+  mean=2.649 median=2 max=10 min=1
+Traceback (most recent call last):
+  File "/home/jcwill/Projects/ptp/scratch/debug_compare.py", line 77, in <module>
+    ptp_metrics, ptp_rounds, prop_log = run_ptp_self(prompt)
+                                        ~~~~~~~~~~~~^^^^^^^^
+  File "/home/jcwill/Projects/ptp/scratch/debug_compare.py", line 62, in run_ptp_self
+    completion, metrics = algo.generate(ids, max_new_tokens=MAX_NEW)
+                          ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jcwill/Projects/ptp/scripts/inference.py", line 2576, in generate
+    completion, ptp_metrics = self.lit_model.generate(
+                              ~~~~~~~~~~~~~~~~~~~~~~~^
+        {"prompt_ids": prompt_ids},
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        max_new_tokens=max_new_tokens,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        return_metrics=True,
+        ^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/torch/utils/_contextlib.py", line 124, in decorate_context
+    return func(*args, **kwargs)
+  File "/home/jcwill/Projects/ptp/src/ptp/lit.py", line 1119, in generate
+    tgt_p, tgt_indices = self.adapt_p(full_p[:, :pos])
+                         ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/home/jcwill/Projects/ptp/src/ptp/lit.py", line 268, in adapt_p
+    remove = (top_k_probs.cumsum(dim=-1) - top_k_probs) > self.top_p
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '>' not supported between instances of 'Tensor' and 'NoneType'

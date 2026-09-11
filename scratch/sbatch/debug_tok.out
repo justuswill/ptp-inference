@@ -1,0 +1,96 @@
+Loading checkpoint: /extra/ucibdl1/jcwill/ptp/checkpoints/vicuna_old/last.ckpt
+Loading weights:   0%|          | 0/291 [00:00<?, ?it/s]Loading weights: 100%|██████████| 291/291 [00:00<00:00, 17036.45it/s]
+The following generation flags are not valid and may be ignored: ['temperature', 'top_p']. Set `TRANSFORMERS_VERBOSITY=info` for more details.
+Applying LoRA adapters
+Loading hist_base from cache: /extra/ucibdl1/jcwill/ptp/checkpoints/vicuna/correct_count_hist.pt
+
+======================== PROMPT 0 ========================
+
+--- GATED (student LoRA off on backlog) ---
+correct_per_call=2.405 num_calls=42
+To express y in terms of x and z, we can use equation (1) to find y in terms of x and machan We can then substitute this value of into equation (2) to find y in terms of z.
+
+Starting with equation (1) we have:
+
+$$\begin{aligned}\textcolor{blue}{x+y}=4z\textcolor{blue}{x}{a}\textcolor{red}{b}=\textcolor{red}{b}\textcolor{blue
+per-round (first 8):
+  round 0: n_prop=20 accepted=2  student='To x the x x we'  teacher='To express y equation equation y'
+  round 1: n_prop=20 accepted=1  student='x in in terms of terms'  teacher='y- terms of of z'
+  round 2: n_prop=20 accepted=4  student='in terms of terms of we'  teacher='in terms of x, z'
+  round 3: n_prop=20 accepted=2  student='and, we can use the'  teacher='and z we can use the'
+  round 4: n_prop=20 accepted=5  student=', we can use the x'  teacher=', we can use equation first'
+  round 5: n_prop=20 accepted=3  student='(1x\n\n y'  teacher='(1) and\n\\'
+  round 6: n_prop=20 accepted=2  student='to\n\n\n\n\n'  teacher='to findderyyy'
+  round 7: n_prop=20 accepted=2  student='y relationship of terms of terms'  teacher='y in with x which ('
+
+--- MERGED (student LoRA everywhere) ---
+correct_per_call=3.030 num_calls=33
+To express x-y in terms of z, we can use the given equations:
+
+1. x+y = 4z
+2. x*y = 4z^2
+
+From the first equation, we can see that x and y are linearly dependent, so we can write:
+
+x = f(z) \* y
+
+where f(z) is a function that determines the relationship between x and z. By plugging f(
+per-round (first 8):
+  round 0: n_prop=20 accepted=2  student='To they equation iny'  teacher='To express best the the,'
+  round 1: n_prop=20 accepted=6  student='x-y in terms,'  teacher='x-y in terms of'
+  round 2: n_prop=20 accepted=7  student='z, we can use the'  teacher='z, we can use the'
+  round 3: n_prop=20 accepted=2  student='equations\n\nyyy'  teacher='equations:\nx =*'
+  round 4: n_prop=20 accepted=3  student='\n\nyyy ='  teacher='\n\n1 = +x'
+  round 5: n_prop=20 accepted=2  student='.+y = 4'  teacher='. xx = 4'
+  round 6: n_prop=20 accepted=2  student='+ = 4z\n'  teacher='+y 4z\n'
+  round 7: n_prop=20 accepted=3  student='= z\n2.'  teacher='= 4\n2.'
+
+======================== PROMPT 1 ========================
+
+--- GATED (student LoRA off on backlog) ---
+correct_per_call=2.349 num_calls=43
+Autumn leaves fall from the trees,
+Yellow, orange, and reds,
+The temperature drops and days grow short,
+But nights are long and pleasant.
+
+The air is crisp and clean,
+The smell of firewood sweet,
+Autumn is also a time for growth,
+As plants prepare for their sleep.
+
+So, let us embrace the changing of the seasons,
+And revel in the beauty of autumn.
+
+
+
+per-round (first 8):
+  round 0: n_prop=20 accepted=2  student='Aut leaves leaves a the the'  teacher='Autumn fall fall aut ground'
+  round 1: n_prop=20 accepted=2  student='leaves a time to the\n'  teacher='leaves fall color of singe'
+  round 2: n_prop=20 accepted=3  student='from the and,\n\n'  teacher='from the trees,\nH'
+  round 3: n_prop=20 accepted=1  student='\n\n a the the the'  teacher=',BB rematr fall'
+  round 4: n_prop=20 accepted=2  student='\n\n colors the the the'  teacher='\nYThe rust floor army'
+  round 5: n_prop=20 accepted=2  student='ellow colors the the the the'  teacher='ellow, dance landscape land the'
+  round 6: n_prop=20 accepted=4  student='orange, and brown,\n'  teacher='orange, and redlee appear'
+  round 7: n_prop=20 accepted=1  student='they they.\n\n\n'  teacher="s' fly\nTheThe"
+
+--- MERGED (student LoRA everywhere) ---
+correct_per_call=2.463 num_calls=41
+Autumn brings a rainbow of color to the land
+The trees shedding leaves like a promise unfulfilled
+The air is crisp with the smell of dying trees
+But the earth is also alive with growing leaves
+A time of change and renewal
+A time of growth and renewal
+A time of love and lossWeather nature's melody or just a fad?
+But the beauty of autumn brings alive the soul
+And gives us a reason to hope
+per-round (first 8):
+  round 0: n_prop=20 accepted=3  student='Autumn leaves a the the'  teacher='Autumn brings fall-ater'
+  round 1: n_prop=20 accepted=2  student='a cr of the\n\n'  teacher='a rainisp to theChildren'
+  round 2: n_prop=20 accepted=2  student='bow leaves\n\n\n\n'  teacher='bow of\nAAThe'
+  round 3: n_prop=20 accepted=2  student='color\n\n\n\n leaves'  teacher='color toToToso\n'
+  round 4: n_prop=20 accepted=2  student='the trees\n\nThe leaves'  teacher='the land\nTheThe leaves'
+  round 5: n_prop=20 accepted=2  student='\n\nThe leaves the the'  teacher='\nTheThe leaves fallink'
+  round 6: n_prop=20 accepted=2  student='treesi to and the the'  teacher='trees shedumbleate trees and'
+  round 7: n_prop=20 accepted=3  student='ding leaves and to the to'  teacher='ding leaves like theps ground'

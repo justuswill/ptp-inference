@@ -1,0 +1,635 @@
+<html><head><!-- frame-runtime --><script>window.__FRAME_PREAMBLE={"v":1,"capabilities":{"artifact":"artifact.BoUB4pxl.js","assets":"assets.B6H5Rue4.js","comments":"comments.CJGulO07.js","db":"db.D373BnLH.js","downloads":"downloads.CKk-Yshd.js","embed":"embed.Hf7Acqy1.js","endpoints":"endpoints.BGpYVATw.js","mcp":"mcp.GIBQRXCC.js","network":"network.B5UA9Su4.js","permissions":"permissions.DAF5cUfF.js","room":"room.Dptr10ye.js","sample":"sample.BTkq5Oaj.js","self":"artifact.BoUB4pxl.js","user":"user.DV7k6YjV.js"},"transforms":"_transforms.C6t_n-gA.js","comments":"_comments.Daca5pvt.js","translate":"_translate.B2LIOQT7.js","ldx":"_ldx.CMCg6PeI.js"}                                                                                                                                                                                                                    </script><script>(function(){"use strict";var St=["light","dark","system"],At=/^[A-Za-z0-9_-]{1,64}$/,Xe=/^[a-zA-Z_:][a-zA-Z0-9_:.-]{0,127}$/,kt=new Set(["class","hidden","value","checked","style","title","alt","placeholder","lang","dir","role","tabindex","disabled","readonly","contenteditable","open","colspan","rowspan"]);function Tt(t){const e=t.toLowerCase();return e.startsWith("data-")||e.startsWith("aria-")||kt.has(e)}var Ye="data-ldx-props";function Rt(t,e){if(e.toLowerCase()===Ye)return!0;const n=t.getAttribute(Ye);if(n===null)return!1;try{const o=JSON.parse(n);if(o===null||typeof o!="object"||Array.isArray(o))return!0;const s=e.toLowerCase();return Object.keys(o).some(a=>a.toLowerCase()===s)}catch{return!0}}var qr="http://www.w3.org/1999/xhtml",Ot="http://www.w3.org/2000/svg",Lt=new Set(["script","style","iframe","noscript","noframes","noembed","xmp","plaintext","template","title","textarea","object","embed"]),Pt=new Set(["script","style"]);function Mt(t){const e=t.localName.toLowerCase();return t.namespaceURI==="http://www.w3.org/1999/xhtml"?!Lt.has(e):t.namespaceURI===Ot?!Pt.has(e):!1}function Te(t,e){return t===e||(t===160||t===32)&&(e===160||e===32)}function Nt(t,e){const n=t.length,o=e.length;let s=0;for(;s<n&&s<o&&Te(t.charCodeAt(s),e.charCodeAt(s));)s++;let a=0;for(;a<n-s&&a<o-s&&Te(t.charCodeAt(n-1-a),e.charCodeAt(o-1-a));)a++;return{p:s,s:a}}function Ct(t,e){const n=t.firstChild;if(t.childNodes.length!==1||n===null||n.nodeType!==Node.TEXT_NODE){t.textContent=e;return}const o=n.data,s=o.length,a=e.length,{p:i,s:f}=Nt(o,e);i===s&&f===0&&s===a||n.replaceData(i,s-i-f,e.slice(i,a-f));const S=n.data,w=t.ownerDocument.getSelection?.()??null,y=w!==null&&w.rangeCount>0&&(w.anchorNode===n||w.focusNode===n)?{anchor:w.anchorNode,anchorOffset:w.anchorOffset,focus:w.focusNode,focusOffset:w.focusOffset}:null;let A=-1,p=-1;for(let b=0;b<S.length&&b<e.length;b++){const L=S.charCodeAt(b),P=e.charCodeAt(b);L!==P&&Te(L,P)&&(A<0&&(A=b),p=b)}const v=A>=0;if(v&&n.replaceData(A,p-A+1,e.slice(A,p+1)),v&&y!==null&&y.anchor!==null&&y.focus!==null)try{w.setBaseAndExtent(y.anchor,y.anchorOffset,y.focus,y.focusOffset)}catch{}}var jt=new Set(["html","head","body","frameset"]);function It(t){return t.namespaceURI==="http://www.w3.org/1999/xhtml"&&jt.has(t.localName)}function xt(t){if(t===null||typeof t!="object")return!1;const e=t;if(typeof e.target!="string"||!At.test(e.target)||e.text!==void 0&&typeof e.text!="string")return!1;if(e.attrsSet!==void 0){if(e.attrsSet===null||typeof e.attrsSet!="object")return!1;for(const[n,o]of Object.entries(e.attrsSet))if(!Xe.test(n)||typeof o!="string")return!1}if(e.attrsRemoved!==void 0){if(!Array.isArray(e.attrsRemoved))return!1;for(const n of e.attrsRemoved)if(typeof n!="string"||!Xe.test(n))return!1}return!0}function Ft(t,e){if(t===null||typeof t!="object")return!1;const{seq:n,elements:o}=t;if(typeof n!="number"||!Number.isSafeInteger(n)||!Array.isArray(o)||o.length===0||o.length>64)return!1;for(let s=0;s<o.length;s++)if(!e(o[s]))return!1;return!0}function Dt(t){return t===null||typeof t!="object"?!1:Ft(t.__frame_patch,xt)}function Ht(t){if(t===null||typeof t!="object")return!1;const e=t.__frame_init;return e!==null&&typeof e=="object"}function qt(t){return t!==null&&typeof t=="object"&&t.__frame_size_poke===!0}function Bt(t){if(t===null||typeof t!="object")return!1;const e=t.__frame_host_visible;return e!==null&&typeof e=="object"&&typeof e.visible=="boolean"}function Ut(t){if(t===null||typeof t!="object")return!1;const e=t.__frame_theme;if(e===null||typeof e!="object")return!1;const n=e.theme;return typeof n=="string"&&St.includes(n)}var zt=["ok","empty","snapshot_error","snapshot_timeout","unclonable","oversize","unavailable","restore_error","withheld"],Kt=["TypeError","RangeError","ReferenceError","SyntaxError","DataCloneError","QuotaExceededError","AbortError","TimeoutError","SecurityError","Error","other"];function Wt(t){return typeof t=="string"&&Kt.includes(t)?t:"other"}var $t=Object.freeze({until:null,now:!1}),Xt="__claude_hot",Yt="__claude_hot_in",Gt=/^__claude_hot(?:_in)?(?::|$)/,Ge=/^[0-9a-z]{1,32}$/,Re=t=>t===void 0?Xt:"__claude_hot:"+t,se=t=>t===void 0?Yt:"__claude_hot_in:"+t;function Vt(t,e){const n=[];for(let o=0;o<t.length;o++){const s=t.key(o);s!==null&&s!==e&&Gt.test(s)&&n.push(s)}for(const o of n)t.removeItem(o)}function Jt(t){let e=null;try{e=q(JSON.parse(t)?.hot)}catch{return null}return e===null||typeof e.k!="string"||!Ge.test(e.k)?null:le(e.g)?{k:e.k,g:e.g}:{k:e.k}}var Br=262144,Zt=3e3,Ve=/^[a-z0-9._:-]{1,64}$/,Qt=["none","hot-restart","hard-reload"],er=["asset","doc","added","removed"],tr=1500,rr=/^[0-9a-f]{64}$/;function q(t){return t!==null&&typeof t=="object"?t:null}function le(t){return typeof t=="number"&&Number.isInteger(t)&&t>=0&&t<2**31}function Je(t){return t===void 0||typeof t=="number"&&Number.isFinite(t)}function nr(t){return t===void 0||typeof t=="string"&&Ve.test(t)}function Ze(t){const e=q(t);return e!==null&&(e.until===null||typeof e.until=="number"&&Number.isFinite(e.until))&&typeof e.now=="boolean"}function Oe(t){const e=q(t);return e!==null&&typeof e.ver=="string"&&e.ver.length<=128&&Je(e.seq)&&typeof e.handoff=="string"&&zt.includes(e.handoff)&&nr(e.note)}function or(t){const e=q(t);return e!==null&&le(e.gen)&&(e.phase==="final"||e.phase==="pending")&&(e.from===null||Oe(e.from))}function ar(t){const e=q(t);return e!==null&&e.kv===1&&le(e.gen)&&Oe(e.from)&&Object.hasOwn(e,"data")}function sr(t){const e=q(t);return e!==null&&e.__frame_hot_snapshot===!0&&le(e.gen)&&typeof e.timeoutMs=="number"&&e.timeoutMs>=0&&e.timeoutMs<=6e4&&(e.handoff===void 0||typeof e.handoff=="boolean")&&(e.deadline===void 0||Ze(e.deadline))&&Je(e.seq)&&(e.note===void 0||typeof e.note=="string")&&(e.key===void 0||typeof e.key=="string")}function lr(t){const e=q(t);return e!==null&&e.__frame_hot_start===!0&&le(e.gen)&&Oe(e.from)}function Qe(t){const e=q(t);return e!==null&&typeof e.ver=="string"&&e.ver.length<=128&&Number.isFinite(e.seq)}function et(t){if(t==null||typeof t=="string")return!0;const e=q(t);return e!==null&&typeof e.doc=="string"&&typeof e.profile=="string"}function ir(t){const e=q(t);return e!==null&&typeof e.path=="string"&&er.includes(e.kind)&&et(e.from)&&et(e.to)}function cr(t){return t===null?null:Object.freeze(t.filter(ir))}function ur(t){const e=q(t);return e!==null&&e.__frame_hot_update===!0&&Number.isFinite(e.id)&&Qe(e.from)&&Qe(e.to)&&(e.changed===null||Array.isArray(e.changed))&&Qt.includes(e.required)&&Ze(e.deadline)&&typeof e.verdictTimeoutMs=="number"&&e.verdictTimeoutMs>=0&&e.verdictTimeoutMs<=6e4&&(e.preflight===void 0||typeof e.preflight=="string"&&rr.test(e.preflight))}var Z=/^[\w.-]+\.js$/;function fr(t,e,n){return n?"inert":typeof e=="string"&&Z.test(e)?t?[e]:"inert":t?"inert":"framed"}var tt=Object.freeze({[Symbol("claude.hot.restart")]:!0});function rt(t,e){let n;try{n=t??sessionStorage}catch{return null}const o=Re(e?.k),s=se(e?.k);let a=null;try{a=n.getItem(o)}catch{}try{n.removeItem(o)}catch{}try{Vt(n,s)}catch{}let i=null;if(a!==null&&!(e!==null&&e.g===void 0))try{const f=JSON.parse(a);ar(f)&&(e===null||f.gen===e.g)&&(i=f)}catch{}if(i===null)try{n.removeItem(s)}catch{}return i}function dr(){const t=/^\/_f\/([^/]{1,128})\//.exec(location.pathname);return t?t[1]:""}var he="{}";function ie(t){if(!t)return null;const e={ver:t.ver,handoff:t.handoff};return t.seq!==void 0&&(e.seq=t.seq),t.note!==void 0&&(e.note=t.note),e}function nt(t,e){return t!==null&&t.note===void 0&&e?.note!==void 0?{...t,note:e.note}:t}function ot(t){const e=t?.k;return e!==null&&typeof e=="object"?e:void 0}function hr(t,e,n,o=null){const s=setTimeout,a=clearTimeout,i=queueMicrotask,f=performance.now.bind(performance),S=new TextEncoder,w=dr();let y=null;try{y=sessionStorage}catch{}const A={storage:y,fetch:typeof fetch=="function"?fetch.bind(globalThis):null,entry:location.origin+location.pathname+location.search,ver:w,key:o?.k};let p=o?.k;const v=typeof requestAnimationFrame=="function"?requestAnimationFrame:r=>s(()=>r(f()),16);let b=e?.data??{},L=ie(e?.from),P=e?.gen??0,h=e!==null,k=!1,E=!1,j=null,ce=!1;const ue=new AbortController;let fe=null,I=null,ee=null,we=!1,$=()=>{};const l=new Promise(r=>{$=r});let m=!1,g=!1,C=!1,M,R=null,D=!1,B=!1;const te=r=>{for(const c of[Re(r),se(r)])try{y?.removeItem(c)}catch{}},x=(r,c)=>{try{c!==null&&n.post(r,c)}catch{}},K=()=>{const r={__frame_hot:!0,ready:I!==null,accept:ee!==null};m&&(r.readData=!0),C&&(r.threw=!0),R?.assess&&(r.preflight=!0),x(r,j)};let d=!1,re=!1,z=!1,ne=!1;const oe=()=>{d||!ce||z||(d=!0,x({__frame_reveal_hold:!0},"*"))},W=()=>new Promise(r=>{let c,u=0;const _=O=>{if(c===void 0)c=O;else if(O!==c||++u>=8){r();return}try{v(_)}catch{r()}};try{v(_)}catch{r()}}),be=()=>{z=!0,x({__frame_reveal_ready:!0},"*")},qe=r=>{re||(re=!0,r.then(c=>{if(c===!1)return;let u=null;try{u=R?.settle?.()??null}catch{}return(u===null?W():new Promise(_=>{s(_,50),Promise.resolve(u).then(_,_)}).then(W)).then(be)}))},Cr=()=>{if(ne||!z)return;ne=!0;const r=()=>{try{R?.afterReveal?.()}catch{}};r(),W().then(()=>{r(),be()})},Ee=(r=!1)=>{if(we||I===null||!h||!E)return;we=!0;const c=I,u=b;i(()=>{let _;try{_=c(u)}catch(H){throw $(!1),H}let O=!1;try{O=typeof _?.then=="function"}catch{}if(!O){$(!0);return}Promise.resolve(_).then(()=>$(!0),H=>{$(!1),i(()=>{throw H})})}),qe(r?l:n.dcl.then(()=>l))},Se=r=>typeof r=="string"&&Ve.test(r)?r:void 0,mt=r=>{const c={__frame_hot_restart:!0},u=Se(r?.note);u!==void 0&&(c.note=u),r?.required==="hard-reload"&&(c.required="hard-reload"),x(c,j)},_t=Object.freeze({get data(){return E||(g=!0),!h&&!m&&(m=!0,E&&K()),b},get from(){return L},get gen(){return P},signal:ue.signal,snapshot(r){typeof r=="function"&&(fe=r)},ready(r){typeof r!="function"||I!==null||(I=r,oe(),K(),k&&x({__frame_hot_ready:!0,gen:P},j),Ee())},accept(r){typeof r=="function"&&(ee=r,K())},restart(r){const c={note:r?.note,required:r?.required};if(E){mt(c);return}const u=M;M={note:Se(u?.note)??c.note,required:u?.required==="hard-reload"||c.required==="hard-reload"?"hard-reload":void 0}}});let Ae=null,yt=()=>{};const jr=new Promise(r=>{yt=r});let Ir=null;const vt=()=>Ir??=n.dcl.then(()=>{let r=!1;try{r=Ae!==null&&Ae.expect()}catch{}if(!r)return;const c=Ae.maxMs;return new Promise(u=>{jr.then(u),s(u,c)})}),gt=()=>{if(!D||B||R===null)return;B=!0;const r=R;vt().then(()=>{try{z||r.afterStart(ot(e),!1)}catch{}})},wt=r=>{e!==null&&g&&(m=!0),b={},L=null,P=0;try{y?.removeItem(se(o?.k))}catch{}e!==null&&!r&&qe(n.dcl.then(()=>I!==null?l:void 0))},xr=()=>{D=!0,qe(vt().then(()=>I!==null?l:void 0)),gt()};try{addEventListener("error",()=>{C||I!==null||(C=!0,K())})}catch{}let X=-1,Be,Ue,de=!0,ze=!1,Ke,ke=null;const We=r=>{const c=ke===null;ke=de&&r[0]!=="withheld"?r:["withheld",r[1],he];let u=r[0];if(de&&u!=="withheld"){const O={ver:w,handoff:u};Be!==void 0&&(O.seq=Be),Ue!==void 0&&(O.note=Ue);try{if(y===null)throw new Error("no storage");y.setItem(Re(p),'{"kv":1,"gen":'+X+',"from":'+JSON.stringify(O)+(Ke!==void 0?',"k":'+JSON.stringify(Ke):"")+',"data":'+(u==="ok"?r[2]:he)+"}")}catch{u="unavailable"}}else{u="withheld",te(p);try{R?.release?.()}catch{}}const _={__frame_hot_snapshotted:!0,gen:X,handoff:u,bytes:r[1]};if(r[3]!==void 0&&(_.errName=r[3]),x(_,j),c&&(u==="snapshot_error"||u==="unclonable"||u==="oversize"))try{console.warn("claude.hot: snapshot",u,r[3])}catch{}},bt=r=>{try{return Wt(r?.name)}catch{return"other"}},ae=(r,c,u=0)=>We(c===void 0?[r,u,he]:[r,u,he,bt(c)]),Fr=r=>{if(r.gen<=X)return;const c=X>=0;if(X=r.gen,Be=r.seq,Ue=Se(r.note),typeof r.key=="string"&&Ge.test(r.key)&&r.key!==p&&(te(p),p=r.key),de&&=r.handoff!==!1,c){ke!==null?We(ke):ze&&x({__frame_hot_held:!0,gen:X},j);return}ue.abort();const u=Object.freeze({handoff:de,timeoutMs:r.timeoutMs,deadline:r.deadline??$t}),_=fe,O=()=>{if(de)try{Ke=R?.capture()}catch{}if(_===null){ae("empty");return}let F=!1;const Y=s(()=>{F||(F=!0,ae("snapshot_timeout"))},Math.max(0,u.timeoutMs));Promise.resolve().then(()=>_(u)).then(G=>{if(F)return;F=!0,a(Y);let V;try{V=JSON.stringify(G)}catch(J){ae("unclonable",J);return}if(typeof V!="string"){ae("unclonable");return}let N=V.length;try{N=S.encode(V).length}catch{}if(N>262144){ae("oversize",void 0,N);return}We(["ok",N,V])},G=>{F||(F=!0,a(Y),ae("snapshot_error",G))})};let H=null;try{H=R?.holdForIme()??null}catch{}if(H===null)O();else{ze=!0,x({__frame_hot_held:!0,gen:X},j);const F=()=>{ze=!1,O()};H.then(F,F)}},Dr=r=>{if(!k||h||I===null||r.gen!==P)return;let c=null;try{c=rt(y,o&&{k:o.k,g:r.gen})}catch{}if(c!==null&&c.gen!==r.gen){c=null;try{y?.removeItem(se(o?.k))}catch{}}b=c?.data??{},L=nt(ie(c?.from??r.from),ie(r.from)),c!==null&&(P=c.gen),h=!0,k=!1;const u=ot(c);l.then(_=>{try{_&&R?.afterStart(u,!0)}catch{}}),Ee(!0)};let $e=0;const Hr=r=>{const c=ee;if(c===null||r.id<=$e)return;$e=r.id;const u=R?.assess;if(r.preflight===void 0||u===void 0){Et(r,c);return}let _=!1;const O=Y=>{_||(_=!0,a(F),r.id===$e&&Et(r,c,Y))},H=()=>O(u.timeout(r)),F=s(H,tr+100);u.run(r,window).then(O,H)},Et=(r,c,u)=>{let _,O=!1;const H=Object.freeze({from:{ver:r.from.ver,seq:r.from.seq},to:{ver:r.to.ver,seq:r.to.seq},changed:cr(r.changed),required:r.required,deadline:r.deadline,restart(N){return _??=Se(N?.note),O||=N?.required==="hard-reload",tt},...u?.update}),F=N=>{const J={__frame_hot_verdict:!0,id:r.id};N==="applied"||N==="deferred"?J.verdict=N:N===tt&&(J.verdict="restart",O&&(J.required="hard-reload"),_!==void 0&&(J.note=_)),x(Object.assign(J,u?.verdict),j)};let Y=!1;const G=N=>Y?!1:(Y=!0,a(V),F(N),!0),V=s(G,r.verdictTimeoutMs);Promise.resolve().then(()=>c(H)).then(G,N=>{if(G(void 0))try{console.warn("claude.hot: accept",bt(N))}catch{}})};try{t.hot===void 0&&Object.defineProperty(t,"hot",{value:_t,writable:!1,configurable:!1,enumerable:!1})}catch{}return{hot:_t,boot:A,afterConnect(){ce=!0,(e!==null||I!==null)&&oe()},onInit(r,c){j=c,E=!0;const u=or(r)?r:null;u?.phase==="final"&&e!==null&&e.gen===u.gen?(h=!0,L=nt(L,ie(u.from)),xr()):(k=u?.phase==="pending",wt(k),h=!k,P=u?.gen??0,L=ie(u?.from)),K(),k&&I!==null&&x({__frame_hot_ready:!0,gen:P},c),M!==void 0&&(mt(M),M=void 0),Ee()},onNoInit(){E=!0,wt(!1),h=!0,Ee()},onShell(r){return r?.__frame_revealed===!0?(Cr(),!1):sr(r)?(Fr(r),!0):lr(r)?(Dr(r),!0):ur(r)?(Hr(r),!0):!1},attachExtras(r){R=r,gt(),r.assess&&K()},inSlot:()=>se(p),hydration(r,c){Ae??={expect:r,maxMs:c}},hydrated(){yt()},carried(){return h?b:{}},presented:()=>z}}var Ur="frame_ldx_runtime",pr="frame_ldx_build",zr="script#an-form",mr=256;function at(t,e,n){for(const o of t)n(o)&&t.delete(o);t.size>=mr&&!t.has(e)&&t.delete(t.values().next().value),t.add(e)}function Le(t,e,n){try{const o=t[e];if(typeof o!="function")return;t[e]=function(...s){const a=o.apply(this,s);try{n(this)}catch{}return a}}catch{}}var Pe;function _r(){if(Pe)return Pe;const t={media:new Set,contexts:new Set,onStart:null,onPause:null};Pe=t;const e=window.HTMLMediaElement?.prototype;e&&(Le(e,"play",s=>{at(t.media,s,a=>a.paused),t.onStart?.(s)}),Le(e,"pause",s=>t.onPause?.(s)));const n=window.AudioContext,o=window.AudioNode?.prototype;return n&&o&&Le(o,"connect",s=>{const a=s.context;a instanceof n&&(at(t.contexts,a,i=>i.state==="closed"),t.onStart?.(a))}),t}function yr(t){let e=window;for(let n=0;e.parent&&e.parent!==e&&n<8;n++)if(e=e.parent,t(e))return!0;return!1}function vr(){let t=null;const e=()=>t??parent,n=o=>t?o===t:yr(s=>s===o);return{post(o,s){if(t){e().postMessage(o,s);return}let a=parent;for(let i=0;i<8&&(a.postMessage(o,s),!(!a.parent||a.parent===a));i++)a=a.parent},on(o){const s=a=>{const i=a.source;n(i)&&o(a.data,a.origin,a.isTrusted,()=>{t??=i})};return addEventListener("message",s),()=>removeEventListener("message",s)},port:o=>({post(s,a){if(a?.activation){e().postMessage(s,{targetOrigin:o,includeUserActivation:!0});return}if(a?.transfer){e().postMessage(s,o,a.transfer);return}e().postMessage(s,o)},on(s,a){const i=f=>{n(f.source)&&f.origin===o&&s(f.data,f)};return addEventListener("message",i,a),()=>removeEventListener("message",i,a)}})}}function gr(){const t={post:()=>{},on:()=>()=>{}};return{...t,port:()=>t}}var Me="__frame_scroll",wr=150,br=310,Er=160,Sr=3e4;function Ar(){let t=0,e=!1,n=!1,o=!1,s=0,a=null;const i=h=>{try{sessionStorage.setItem(Me,JSON.stringify({y:h}))}catch{}},f=()=>{if(clearTimeout(t),a===null)return;const h=a;a=null,i(h)},S=()=>{if(e){e=!1;return}n=!0,a=scrollY,clearTimeout(t),t=setTimeout(f,wr)};try{addEventListener("scroll",S,{passive:!0}),addEventListener("pagehide",f)}catch{}const w=()=>{let h;try{h=sessionStorage.getItem(Me)}catch{return null}if(h===null)return null;let k;try{k=JSON.parse(h)}catch{k=null}const E=k?.y;if(!(typeof E=="number"&&Number.isFinite(E)&&E>=0)){try{sessionStorage.removeItem(Me)}catch{}return null}return E};let y=!1;const A=h=>{try{const k=scrollY;scrollTo({top:h,left:0,behavior:"instant"}),s=h,o=!0,clearTimeout(t),a=null,i(h);const E=scrollY;E!==k&&(e=!0),E!==h&&!y&&(y=!0,addEventListener("load",()=>{try{if(scrollY===E){const j=w();A(j!==null?j:s)}}catch{}},{once:!0}))}catch{}},p=()=>{try{return!!location.hash}catch{return!0}};let v=!1;const b=()=>{try{if(v||innerWidth>br||innerHeight>Er)return;v=!0;const h=Date.now(),k=()=>{try{removeEventListener("resize",k)}catch{}if(Date.now()-h>Sr||n||p())return;const E=w();A(E!==null?E:s)};addEventListener("resize",k)}catch{}};let L=!1,P=!1;return{restore(){if(L||(L=!0,p()))return;const h=w();h!==null&&(A(h),b())},promoted(){if(P||(P=!0,p()))return;const h=w();h!==null?(A(h),b()):o&&A(s)}}}function kr(t,e,n,o){let s=null;try{s=window.trustedTypes?.createPolicy("frame-runtime",{createScriptURL:S=>S})??null}catch{}const a=window.Worker,i=a?.prototype,f=Object.freeze({Worker:a,workerOn:i?.addEventListener,workerPost:i?.postMessage,workerTerminate:i?.terminate,fetch:window.fetch.bind(window),preventDefault:Event.prototype.preventDefault,now:Date.now,policy:s,origins:e});n(t).then(S=>S?.bootTopLevel?S.bootTopLevel(f,o):o.settle()).catch(()=>o.settle())}var Kr="modulepreload",Wr=function(t){return"/"+t},$r={},Tr=function(e,n,o){let s=Promise.resolve();function a(i){const f=new Event("vite:preloadError",{cancelable:!0});if(f.payload=i,window.dispatchEvent(f),!f.defaultPrevented)throw i}return s.then(i=>{for(const f of i||[])f.status==="rejected"&&a(f.reason);return e().catch(a)})},Rr=window===top,st=Object.getOwnPropertyDescriptor(window,"claude"),pe=fr(Rr,window.__FRAME_PREAMBLE?.topLevel,st?.writable===!1),Ne=typeof pe=="object"&&pe[0],T=Ne?gr():vr();(function(){const t=Object.defineProperty,e=globalThis,n=["RTCPeerConnection","webkitRTCPeerConnection","RTCDataChannel","RTCIceCandidate","RTCSessionDescription","RTCRtpSender","RTCRtpReceiver"];let o=0;for(let s=0;s<n.length;s++){const a=n[s];try{t(e,a,{value:void 0,writable:!1,configurable:!1})}catch{try{delete e[a]}catch{}try{t(e,a,{value:void 0,writable:!1,configurable:!0})}catch{}}typeof e[a]=="function"&&o++}if(o&&pe==="framed")try{T.post({__frame_rtc_lockdown_failed:o},"*")}catch{}})();var Or=1e4,Lr=2e3,Ce=2e3,lt=Object.freeze([...window.__FRAME_PREAMBLE?.origins??["https://claude.ai","https://preview.claude.ai"]]);function it(t){for(const e of lt)if(e.endsWith(":*"))try{const n=new URL(t);if(`${n.protocol}//${n.hostname}:*`===e)return!0}catch{}else if(t===e)return!0;return!1}var me=Object.freeze({...window.__FRAME_PREAMBLE?.capabilities}),je=window.__FRAME_PREAMBLE?.transforms,Ie=window.__FRAME_PREAMBLE?.comments,xe=window.__FRAME_PREAMBLE?.translate,_e=window.__FRAME_PREAMBLE?.ldx;function Q(t){return Tr(()=>import("/_runtime/"+t),void 0)}function ct(t,e,n){return{contract:t.contract,changes:new Set(t.changes??[]),flags:new Set(t.flags??[]),capabilities:t.capabilities??{},capBudgets:t.capBudgets??{},transforms:new Map,shellOrigin:e,shell:n,mount:He,hooks:ve,pipe:()=>({wrap:(o,s)=>(...a)=>{try{return s(...a)}catch(i){return Promise.reject(i)}}})}}var ye=null,U=null;function ut(t,e,n){try{Object.defineProperty(t,e,{value:n,writable:!1,configurable:!1,enumerable:!0})}catch{try{Object.defineProperty(t,e,{value:n,writable:!1,configurable:!0,enumerable:!0})}catch{}}}var Fe=!1,ve={editBefore:null,edit:null};function Pr(t,e,n=!1){const o=[];let s;if(n)try{ve.editBefore?.(t)}catch{}for(const a of t.elements){const i=document.querySelector(`[data-id="${a.target}"]`);if(!i){s=a.target;break}if([...Object.keys(a.attrsSet??{}),...a.attrsRemoved??[]].some(f=>!Tt(f)||Rt(i,f))){s=a.target;break}if(a.text!==void 0&&(!Mt(i)||It(i))){s=a.target;break}for(const[f,S]of Object.entries(a.attrsSet??{}))if(!dt(i,f)){try{i.setAttribute(f,S)}catch{}ft(i,f,S)}for(const f of a.attrsRemoved??[])dt(i,f)||(i.removeAttribute(f),ft(i,f,null));typeof a.text=="string"&&Ct(i,a.text),o.push(a.target)}if(n)try{ve.edit?.(t.seq,o,s)}catch{}if(s!==void 0){T.post({__frame_patch_miss:{seq:t.seq}},e);return}try{document.dispatchEvent(new CustomEvent("claude:edit",{detail:{seq:t.seq,targets:o}}))}catch{}}function ft(t,e,n){if(!(t instanceof HTMLInputElement))return;const o=e.toLowerCase();o==="checked"?t.checked=n!==null:o==="value"&&t.type!=="file"&&(t.value=n??"")}function dt(t,e){const n=e.toLowerCase(),o=t;return n==="data-id"||(n==="value"||n==="checked")&&(o.__artifactSecret===!0||/^(password|hidden|file)$/.test(o.type??"")||/(^|\s)(cc-|one-time-code|current-password|new-password)/i.test(`${t.getAttribute("autocomplete")??""} ${o.autocomplete??""}`))}function ht(t){const e=document.documentElement;t==="light"||t==="dark"?(e.dataset.theme=t,e.style.colorScheme=t,Fe=!0):Fe&&(delete e.dataset.theme,e.style.colorScheme="",Fe=!1)}var ge=new Map;function Mr(){let t;const e={u:new Promise(n=>{t=n}),r:n=>{e.done=!0,t(n)},done:!1,nulled:!1};return e}function De(){for(const t of ge.values())t.done||(t.nulled=!0,t.r(null))}var Nr=Object.freeze(Object.assign(Object.create(null),{call:Function.prototype.call,apply:Function.prototype.apply,bind:Function.prototype.bind})),He=(t,e)=>{const n=ge.get(t);if(!n||n.done){n?.nulled&&U&&T.post({__frame_cap_telemetry:{kind:"cap-load-error",cap:t}},U);return}const o=typeof e=="function"?Object.setPrototypeOf(e,Nr):Object.assign(Object.create(null),e);typeof o.then=="function"&&delete o.then,n.r(Object.freeze(o))};function pt(){const t=st?.value??{};ut(window,"claude",t);for(const e of Object.keys(me)){if(t[e]!==void 0){ut(t,e,t[e]);continue}ge.set(e,Mr())}if(t.use===void 0){const e=n=>{if(typeof n!="string"||!Object.hasOwn(me,n))return Promise.resolve(null);const o=ge.get(n);return o?o.u:Promise.resolve(t[n]??null)};try{Object.defineProperty(t,"use",{value:e,writable:!0,configurable:!0,enumerable:!1})}catch{}}return t}if(pe==="framed"){const t=je&&Z.test(je)?Q(je).catch(()=>{}):Promise.resolve(void 0),e=l=>{if(l.type==="auxclick"&&l.button!==1)return;const m=l.target,g=m&&m.closest?m.closest("a[href],area[href]"):null;if(!g)return;const C=g.getAttribute("href");if(!C)return;let M;try{M=new URL(C,document.baseURI)}catch{return}if((M.protocol==="http:"||M.protocol==="https:")&&M.origin!==location.origin){l.preventDefault();const R=(g.getAttribute("target")??"").toLowerCase(),D=l.type==="auxclick"||l.metaKey||l.ctrlKey||l.shiftKey||l.altKey||!["","_self","_top","_parent"].includes(R);T.post({__frame_nav:!0,url:M.href,newTab:D},"*")}};addEventListener("click",e,!0),addEventListener("auxclick",e,!0);const n={},o=l=>{l.isTrusted&&(n.pointer=!0)},s=l=>{l.isTrusted&&(n.click=!0)};addEventListener("pointermove",o,{capture:!0,passive:!0}),addEventListener("click",s,{capture:!0,passive:!0});const a={cb:null};addEventListener("keydown",l=>a.cb?.(l),!0);const i=_r();t.then(l=>l?.installEscapeForward?.(a,m=>{U&&T.post(m,U)})),t.then(l=>{try{l?.installFocusKeep?.()}catch{}}),t.then(l=>{if(!l?.wireNav)return;const m=T.port("*");l.wireNav(m),removeEventListener("click",e,!0),removeEventListener("auxclick",e,!0),removeEventListener("pointermove",o,!0),removeEventListener("click",s,!0),l.wireEngagement?.(n,m)});let f=null;try{f=Ar()}catch{}const S=document.readyState==="loading"?new Promise(l=>document.addEventListener("DOMContentLoaded",()=>l(),{once:!0})):Promise.resolve();let w=null,y=null;try{y=Jt(window.name),w=rt(null,y)}catch{}const A=pt();let p=null;try{p=hr(A,w,{post:(l,m)=>T.post(l,m),dcl:S},y)}catch{}t.then(l=>{try{p&&l?.installHotExtras?.(p)}catch{}});let v=null;const b=()=>Array.isArray(v?.flags)&&v.flags.includes("frame_ldx_runtime")&&!!_e&&Z.test(_e)&&document.querySelector("script#an-form")!==null;try{p?.hydration(b,Zt)}catch{}let L=null,P=0;const h=T.on((l,m,g,C)=>{it(m)&&Ht(l)&&(C(),v=l.__frame_init,U=m,h(),clearTimeout(P),L?.())});T.post({__frame_connect:!0},"*");try{p?.afterConnect()}catch{}const k=setTimeout,E=clearTimeout;let j=()=>NaN;try{j=performance.now.bind(performance)}catch{}let ce=0;const ue=()=>{try{T.post({__frame_alive:!0},"*")}catch{}ce=k(ue,Lr)},fe=()=>E(ce);ue(),addEventListener("load",fe,{once:!0});const I=new Promise(l=>{L=l,P=setTimeout(()=>{h(),l()},Or)}),ee=new WeakSet;addEventListener("error",l=>{l.target&&ee.add(l.target)},!0);const we=()=>{let l=[];try{l=[...document.querySelectorAll("link[rel~=stylesheet]:not([rel~=alternate])")].filter(g=>!g.sheet&&!g.disabled&&!ee.has(g)&&g.getAttribute("href")&&URL.canParse(g.href)&&(!g.media||matchMedia(g.media).matches))}catch{}let m=l.length;return m===0?Promise.resolve():new Promise(g=>{try{const C=Ce-j(),M=k(g,C>0?C<Ce?C:Ce:0),R=()=>{--m===0&&(E(M),g())};for(const D of l)D.addEventListener("load",R,{once:!0}),D.addEventListener("error",R,{once:!0})}catch{g()}})};S.then(()=>{try{f?.restore()}catch{}});const $={cb:null};T.on((l,m)=>{if(it(m)&&qt(l)){try{f?.promoted()}catch{}$.cb?.()}}),I.then(async()=>{if(!v||!U){De();try{p?.onNoInit()}catch{}return}ht(v.theme),v.hostVisible===!1&&t.then(d=>d?.applyHostVisible?.(!1,i));try{p?.onInit(v.hot,U)}catch{}const l=U,m=T.port(l);let g=!1,C=!1;T.on((d,re,z)=>{if(re!==l)return;try{if(p?.onShell(d))return}catch{}if(Ut(d)&&ht(d.__frame_theme.theme),Bt(d)){const W=d.__frame_host_visible.visible;t.then(be=>be?.applyHostVisible?.(W,i))}Dt(d)&&Pr(d.__frame_patch,l,z);const ne=d?.__fc_mode;ne&&typeof ne=="object"&&!g&&Ie&&Z.test(Ie)&&(g=!0,Q(Ie).then(W=>W.install?.(l,ne.on===!0,m)).catch(()=>{}));const oe=d?.__ft_cmd;oe&&typeof oe=="object"&&!C&&xe&&Z.test(xe)&&(C=!0,Q(xe).then(W=>W.install?.(l,oe,m)).catch(()=>{}))});const M=Object.keys(v.capabilities??{}).filter(d=>Object.hasOwn(me,d)).map(d=>[d,me[d]]).filter(d=>typeof d[1]=="string"&&Z.test(d[1])),R=await Promise.allSettled(M.map(([,d])=>Q(d))),D=await t,B=U;if(D?.buildBoot||T.post({__frame_cap_telemetry:{kind:"cap-load-error",cap:"_transforms"}},B),D?.buildBoot)try{ye=D.buildBoot(v,D.TRANSFORMS??{},{shellOrigin:B,mount:He,hooks:ve,shell:m},d=>T.post({__frame_cap_telemetry:d},B))}catch{T.post({__frame_cap_telemetry:{kind:"cap-load-error",cap:"_transforms"}},B),ye=ct(v,B,m)}else ye=ct(v,B,m);const te=d=>T.post({__frame_cap_telemetry:{kind:"cap-load-error",cap:d}},B),x=ye;R.forEach((d,re)=>{const z=M[re][0];if(d.status!=="fulfilled"){te(z);return}try{d.value?.install?.(x)}catch{te(z)}}),De(),await S,await we(),fe(),T.post({__frame_ready:!0},U),t.then(d=>d?.installSizeReporter?.(B,$,m));let K=!1;try{K=b()}catch{}_e&&K?Q(_e).then(d=>d?.boot?.({shellOrigin:l,build:x.flags.has(pr),hot:p?.hot??null,carried:p?.carried(),presented:()=>p?.presented()??!0})).catch(()=>!1).then(d=>{p?.hydrated(),d!==!0&&te("_ldx")}):p?.hydrated()})}else Ne&&(pt(),kr(Ne,lt,Q,{settle:De,mount:He}))})();</script><!-- /frame-runtime --><meta charset="utf8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>:root{color-scheme:light}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}</style><style>:root [href="https://adstub.net/cina777/"], :root [href="https://adstub.net/judi89/"], :root [href^="//mage98rquewz.com/"], :root .inset-x-0[x-data="adblockBanner()"], :root #hero a[download="Unicore.zip"], :root body > div[data-captcha-enable="true"] > div.cleanslate[id^="google-captcha-"] > div.captcha-box, :root html > #__cf_challenge_host__, :root html[data-scrapbook-source][data-scrapbook-create][data-scrapbook-title] > body.no-js > div.main-wrapper[role="main"] > div.main-content, :root html > body.body > div.container > div.content > form > table.optoutForm, :root html > body > div.container > form#unsubscribe-form[onsubmit="submitUnsubscribeForm(event)"], :root html[lang] > body:not([class]):not([id]):not([style]) > div.background-container > div.container > div.captcha-box, :root .wp-singular > iframe[srcdoc][allowfullscreen][allow*="clipboard-write"][style*="2147483647"], :root html > #nc-cover:not(body), :root body > .cf-root, :root .cjs-container > #checkbox-window, :root .wp-singular > div[data-sm][style*="2147483647"] > iframe[style*="100%"][allow*="clipboard-write"], :root #ipBar + .main, :root #mainBtn[onclick="startVerify()"], :root #turnstile[onclick="handleClick()"], :root body > .page > .verify-row, :root body > .page > #mainVerifyRow, :root html[lang] > body.ishome > div.adult + main.main, :root .container a[title="AI Jerk OFF"][href][target="_blank"], :root body > #mdl-register.modal.anm-e.regnow, :root .flex a[href^="http://adpostup.com/"], :root #app-root ~ a[href][target="_blank"][style="position: fixed;top: 0;left: 0;width: 100%;height: 100%;display: block;z-index: 9999999;cursor: auto"], :root #wrapper ~ a[href][target="_blank"][style="position: fixed;top: 0;left: 0;width: 100%;height: 100%;display: block;z-index: 9999999;cursor: auto"], :root .header ~ div[style^="position:fixed;inset:0;z-index:2147483647;background:black;opacity:0.01;height:"], :root img[width="728"][height="90"], :root button.btn[data-openuri*="/4/"], :root #adbtm[onclick="badr();"], :root #teaser3[style^="width: 100%;height:0;text-align: center;display: scroll;position:fixed;"], :root a[href^="https://www.polybuzz.ai/"] img.responsive-image, :root .kln > a[href^="https://www.polybuzz.ai/"], :root html[lang][style^="--main-bg-color"] > body:not([class]):not([id]) > div#container[style="visibility: visible;"] > div#banner[style="opacity:0"] ~ main:not([class]):not([id]) > div#message, :root #donate > a[href][style][onclick="thank_you()"][target="_blank"][rel="nofollow"], :root .container a[href^="https://insensitiveshoweraudible.com/"], :root .jwplayer ~ div[style="position:absolute;top:0;left:0;width: 100%;height: 100%;z-index:2147483647"], :root iframe.lazyloaded[data-src^="https://rcm-fe.amazon-adsystem.com/"], :root div[style^="position: fixed; inset: 0px; z-index: 2147483647; background: black; opacity: 0.01"], :root .skel-layers-fixed a[href*=".com/smartpop/"], :root [style^="position: fixed; inset: 0px; z-index: 2147483647; background-color: transparent; pointer-events: auto; cursor: auto; margin: 0px; padding: 0px; display: block;"], :root .ads-iframe:not([style="position: absolute; left: -10px; top: -10px;"]), :root .ad-content:not(:empty), :root div[style="position: fixed; display: block; width: 100%; height: 100%; inset: 0px; background-color: rgba(0, 0, 0, 0); z-index: 300000;"], :root #weatherad:not(:empty), :root #topbannerad:not(:empty), :root #topBannerAd:not(:empty), :root #ad_img:not(:empty), :root #adContext:not(:empty), :root .ad-300x250:not(.ads), :root [data-ad-width]:not([style$="left: -10000px !important; top: -1000px !important;"]):not(.adsbygoogle), :root .adunit:not(.text-ad), :root .adslot_1:not(.text-ad), :root [href="https://adstub.net/ratu89/"], :root #ads-footer:not([style^="position: absolute; left: -5000px"]), :root a.tdn[href^="https://landing.brazzersnetwork.com/"], :root #ads-1:not([style^="position: absolute; left: -5000px"]), :root #adframe:not(frameset):not([style^="position: absolute; left: -5000px"]), :root #ad_slot:not([style^="position: absolute; left: -5000px"]), :root #ad_big:not([style^="position: absolute; left: -5000px"]), :root #ad_area:not([style^="position: absolute; left: -5000px"]), :root #ad_300:not([style^="position: absolute; left: -5000px"]), :root a[dontfo=""][style$="position: absolute; z-index: 2147483647;"], :root [href^="https://join.enjoyx.com/track/"], :root a[href*=".click/?z="][href*="&n"], :root [href^="//taghaugh.com/"], :root div[class$="player-promo-col"], :root [href^="https://www.safestcontentgate.com/"], :root [href^="//cadsecs.com/"], :root [href^="//mellowads.com/"], :root .cjs-container > #verify-window, :root [href^="https://fireads.online/"], :root html[lang="vi"] .sspp-area, :root html[lang="tr"] > body.has-footer-ad.has-pageskin-desktop a.pageskin-desktop-wrapper, :root html[lang="tr"] #aa-wp .container-ads-adjustment, :root body > a.visible[id][href][target="_blank"], :root #videojs ~ div[style="position: absolute; top: 0px; left: 0px; width: 100%; height: 100%; z-index: 2147483646;"], :root html > #bw-rc-host, :root .close-btn4[onclick="closeAd4()"], :root .close-btn3[onclick="closeAd3()"], :root .close-btn[onclick="closeAd()"], :root #go-to-top + div[id][class], :root .bb ~ main#container .containerAds, :root #midadd:not(:empty), :root #adzerk:not(:empty), :root [href^="//x4pollyxxpush.com/"], :root #advert-header:not(:empty), :root div.card > div#cbRow.checkbox-row[onclick="startVerify()"], :root #tongkatlol ~ script[src^="/shrinke/js/"] ~ .main-content-box > div[style="width:100%;height:110px"], :root body > div[style$="z-index: 2147483647; top: 0px; left: 0px; position: fixed; display: block;"], :root html > body > div.container.m-p > #checkbox-window.checkbox-window, :root .container a[href^="https://seduced.com"][href*="ref="], :root #kt_player .fp-brand, :root a[id][href="https://toolkitspro.com"][rel^="noopener noreferrer"], :root #kt_player #ads_iframe, :root .header-container a[href^="https://candyai.gg/"], :root [src^="//dombnrs.com/"], :root [href="https://adstub.net/arab777/"], :root #kt_player ~ #sp-player, :root a[href*="/go.php?a_aid="], :root [href^="https://klsdee.com/"], :root [href^="//producebreed.com/"], :root #modern-player-root ~ div[id^="custom-invisible-overlay-"][class^="custom-popup-overlay-"], :root [href="//xxxrevpushclcdu.com/app.webp"], :root [href^="https://adult.xyz/"], :root [href^="https://popcash.net/"], :root a[href^="http://www.poweredbyliquidfire.mobi/"], :root [href^="https://t.mobtyb.com/"], :root [data-lnguri*="vipbox"], :root .reklama:not(.ads), :root a[href^="https://syndication.exdynsrv.com/splash.php"], :root [href*="/afu.php"], :root span[id^="ezoic-pub-ad-placeholder-"], :root ins.adsbygoogle[data-ad-slot], :root ins.adsbygoogle[data-ad-client], :root img[src^="https://s-img.adskeeper.com/"], :root #download a[download="Unicore.zip"], :root guj-ad, :root gpt-ad, :root div#spot-holder.spot-holder[style="display: block;"], :root div[ow-ad-unit-wrapper], :root div[id^="zergnet-widget"], :root html[lang] > body:not([class]):not([id]):not([style]) > div.container > div.recaptcha-box, :root div[id^="vuukle-ad-"], :root div[id^="taboola-stream-"], :root div[id^="sticky_ad_"], :root div[id^="st"][style^="z-index: 999999999;"], :root div[id^="rc-widget-"], :root html > body > div.content > dl > dd.dd1 > div.min_sider > form#form1[action="unsubscribe.php"], :root div[id^="mrec-leaderboard-"], :root div[id^="gpt_ad_"], :root div[id^="ezoic-pub-ad-"], :root div[id^="dfp-ad-"], :root div[id^="crt-"][style], :root div[id^="adspot-"], :root a[onclick="openAuc();"], :root ps-connatix-module, :root div[id^="ad_position_"], :root [data-ad-module]:not([style$="left: -10000px !important; top: -1000px !important;"]):not(.adsbygoogle), :root a[id][href="https://chpadblock.com/"][rel^="noopener noreferrer"], :root div[id^="ad-div-"], :root div[id*="ScriptRoot"], :root div[id*="MarketGid"], :root [href="https://adstub.net/rusia777/"], :root #banner468:not([style^="position: absolute; left: -5000px"]), :root div[data-id-advertdfpconf], :root div[data-dfp-id], :root div[style="top: 0px; left: 0px; width: 1287px; height: 500px; position: fixed; z-index: 2147483647;"], :root hl-adsense, :root div[data-contentexchange-widget], :root div[data-alias="300x250 Ad 2"], :root div[data-adzone], :root #buy-sell-ads:not(:empty), :root div[data-adunit-path], :root div[data-adname], :root div[data-ad-targeting], :root div[data-ad-region], :root div[data-ad-placeholder], :root div[aria-label="Ads"], :root .google-ad:not(.testAd), :root display-ads, :root #ad_space:not([style^="position: absolute; left: -5000px"]), :root display-ad-component, :root atf-ad-slot, :root aside[id^="adrotate_widgets-"], :root div[style^="position:fixed;inset:0px;z-index:2147483647;background:black;opacity:0.01"], :root aside[aria-label="retailmedia.complimentarySponsored"], :root html[lang] > body#body > * > div.cvh.BlockClicksActivityBusy, :root amp-fx-flying-carpet, :root amp-embed[type="taboola"], :root html > #nochain-demo-frame:not(body), :root html[lang="tr"] #aa-wp .rnd-ads-adjustment, :root amp-connatix-player, :root div[id^="google_dfp_"], :root ad-slot, :root a[href^="https://www.purevpn.com/"][href*="&utm_source=aff-"], :root a[href^="https://www.onlineusershielder.com/"], :root html[lang="tr"] > body.has-footer-ad.has-pageskin-desktop a.pageskin-click-right, :root a[href^="https://financeads.net/tc.php?"], :root a[href^="https://www.mrskin.com/tour"], :root a[href^="https://www.infowarsstore.com/"] > img, :root a[href^="https://www.highperformancecpmgate.com/"], :root amp-ad, :root a[href^="https://www.highcpmrevenuenetwork.com/"], :root a[href^="https://www.get-express-vpn.com/offer/"], :root a[href^="https://lnkxt.bannerator.com/"], :root a[href^="https://www.geekbuying.com/dynamic-ads/"], :root #cmdTextDisplay ~ *, :root [href^="https://groorsoa.net/"], :root a[href^="https://www.financeads.net/tc.php?"], :root a[href^="https://www.effectiveratecpm.com/"], :root [href^="https://www.herbanomic.com/"] > img, :root a[href^="https://www.dql2clk.com/"], :root [data-template-type="nativead"], :root a[href^="https://www.adultempire.com/"][href*="?partner_id="], :root a[href^="https://www.nutaku.net/signup/landing/"], :root a[href^="https://www.dating-finder.com/signup/?ai_d="], :root a[href^="https://wolf-327b.com/"], :root body > .content-wrapper > .cf-wrap, :root [data-ad-manager-id]:not([style$="left: -10000px !important; top: -1000px !important;"]):not(.adsbygoogle), :root a[href^="https://voluum.prom-xcams.com/"], :root a[href^="https://twinrdsyte.com/"], :root .category-ads:not(html):not(body):not(.post), :root a[href^="https://twinrdsrv.com/"], :root [href="https://snvhost.com/"], :root a[href^="https://trk.nfl-online-streams.club/"], :root a[href^="https://tracking.avapartner.com/"], :root a[href^="https://track.wg-aff.com"], :root a[href^="https://track.ultravpn.com/"], :root a[href^="https://track.afcpatrk.com/"], :root [href="https://t.me/Russia_Vs_Ukraine_War3"], :root a[href^="https://track.adform.net/"], :root a[href^="https://torguard.net/aff.php"] > img, :root .menu-item a[href^="https://go.rmhfrtnd.com"], :root [data-identity="adhesive-ad"], :root a[href^="https://tc.tradetracker.net/"] > img, :root a[href^="https://tatrck.com/"], :root a[href^="https://click.candyoffers.com/"], :root [href^="https://zstacklife.com/"] img, :root a[href^="https://t.aslnk.link/"], :root .container a[href^="https://go.mavrtracktor.com/"], :root a[onmousedown^="this.href='https://paid.outbrain.com/network/redir?"], :root a[href^="https://t.ajump1.com/"], :root a[href^="https://t.adating.link/"], :root a[href^="https://go.trackitalltheway.com/"], :root [href^="https://track.fiverr.com/visit/"] > img, :root a[href^="https://syndication.exoclick.com/"], :root a[href^="https://syndication.dynsrvtbg.com/"], :root div[data-alias="300x250 Ad 1"], :root a[href^="https://syndicate.contentsserved.com/"], :root a[href^="https://svb-analytics.trackerrr.com/"], :root a[onmousedown^="this.href='https://paid.outbrain.com/network/redir?"] + .ob_source, :root a[href^="http://www.iyalc.com/"], :root a[href^="https://claring-loccelkin.com/"], :root a[href^="https://stardomcoit.com/"], :root a[href^="https://track.aftrk5.com/"], :root a[href^="https://slkmis.com/"], :root a[href^="https://myclick-2.com/"], :root a[href^="https://sexynearme.com/"], :root a[href^="https://s.zlinkt.com/"], :root a[href^="https://s.zlinkr.com/"], :root bottomadblock, :root a[href^="https://s.zlinkd.com/"], :root [href="https://adstub.net/gaza88/"], :root a[href^="https://ad.doubleclick.net/"], :root a[href^="https://static.fleshlight.com/images/banners/"], :root a[href^="https://s.zlink7.com/"], :root a[href^="https://s.ma3ion.com/"], :root a[href^="https://www.privateinternetaccess.com/"] > img, :root a[href^="https://s.gentlefieldpattern.com/"], :root a[href^="https://s.eunow4u.com/"], :root a[href^="https://random-affiliate.atimaze.com/"], :root #downloadAd:not(:empty), :root #kt_player > div[style$="display: block;"][style*="inset: 0px;"], :root a[href^="https://quotationfirearmrevision.com/"], :root a[href^="https://pubads.g.doubleclick.net/"], :root a[href^="https://prf.hn/click/"][href*="/camref:"] > img, :root a[href^="https://www.dating-finder.com/?ai_d="], :root a[href^="https://serve.awmdelivery.com/"], :root a[href^="https://prf.hn/click/"][href*="/adref:"] > img, :root app-ad, :root [href^="https://ap.octopuspop.com/click/"] > img, :root a[href^="https://postback1win.com/"], :root html[lang] > body#body > * > div.cv-xwrapper > div.cvc > div.cv-inner, :root [href^="https://go.mavrtracktor.com/"], :root a[href^="https://a.adtng.com/"], :root a[href^="https://playnano.online/offerwalls/?ref="], :root a[href^="https://mmwebhandler.aff-online.com/"], :root a[href^="https://www.bet365.com/"][href*="affiliate="], :root a[href^="https://pb-track.com/"], :root a[href^="https://pb-front.com/"], :root a[href^="https://paid.outbrain.com/network/redir?"], :root a[href^="https://streamate.com/landing/click/"], :root div[class^="Adstyled__AdWrapper-"], :root a[href^="https://osfultrbriolenai.info/"], :root a[href^="https://upsups.click/"], :root .ad-placeholder:not(#detect, #detect_ad_empire, #filter_ads_by_classname, .adsbox), :root a[href^="https://ndt5.net/"], :root a[href^="https://natour.naughtyamerica.com/track/"], :root a.poly-title[href^="https://www.polybuzz.ai/"], :root a[href^="https://mediaserver.entainpartners.com/renderBanner.do?"], :root [data-ad-name], :root a[href^="https://loboclick.com/"], :root a[href^="https://lead1.pl/"], :root .cta-button[onclick="openUpdateModal()"], :root a[href^="https://landing.brazzersnetwork.com/"], :root a[href^="https://join.bannedsextapes.com/track/"], :root [href^="https://exi8ef83z9.com/"], :root a[href^="https://jaxofuna.com/"], :root a[href^="https://italarizege.xyz/"], :root .category-ad:not(html):not(body):not(.post), :root a[href^="https://s.happyleafmotion.com/"], :root a[href^="https://identicaldrench.com/"], :root a[href^="https://helmethomicidal.com/"], :root #adsquare:not([style^="position: absolute; left: -5000px"]), :root a[href^="https://golinks.work/"], :root a[href^="https://go.xxxjmp.com"], :root [class^="div-gpt-ad"]:not([style^="width: 1px; height: 1px; position: absolute; left: -10000px; top: -"]), :root a[href^="https://zirdough.net/"], :root [class^="tile-picker__CitrusBannerContainer-sc-"], :root a[href^="https://go.xxxiijmp.com"], :root .ad-link:not(.adsbox), :root a[href^="https://go.xtbaffiliates.com/"], :root a[href^="https://go.xlviirdr.com"], :root div[class$="-adlabel"], :root a[href^="https://go.xlviiirdr.com"], :root a[href^="https://go.xlivrdr.com"], :root a[href^="https://ismlks.com/"], :root [href^="https://www.mypillow.com/"] > img, :root a[href^="https://go.xlirdr.com"], :root [data-css-class="dfp-inarticle"], :root a[href^="https://go.tmrjmp.com"], :root a[href^="https://go.markets.com/visit/?bta="], :root a[href^="https://billing.purevpn.com/aff.php"] > img, :root a[href^="https://go.hpyrdr.com/"], :root [data-lnguri^="https://s3.amazonaws.com"], :root a[href^="https://lijavaxa.com/"], :root a[href^="https://go.goaserv.com/"], :root a[href^="https://go.etoro.com/"] > img, :root a[href^="https://go.dmzjmp.com"], :root a[href^="https://www.bang.com/?aff="], :root #mgb-container > #mgb, :root a[href^="https://go.admjmp.com"], :root a[href^="https://get.surfshark.net/aff_c?"][href*="&aff_id="] > img, :root a[href^="https://datewhisper.life/"], :root a[href^="https://click.linksynergy.com/fs-bin/"] > img, :root a[href^="https://get-link.xyz/"], :root a[href^="https://www.mrskin.com/account/"], :root a[id][href="https://hamrocsit.com"][rel^="noopener noreferrer"], :root a[href^="https://www.adskeeper.com"], :root #vidcloud-player > #overlay-container, :root a[data-redirect^="https://paid.outbrain.com/network/redir?"], :root [href^="https://clicks.affstrack.com/"] > img, :root a[href^="https://engine.phn.doublepimp.com/"], :root a[href^="https://dl-protect.net/"], :root a[href*=".foxqck.com/"], :root a[href^="https://ctosrd.com/"], :root a[href^="https://clixtrac.com/"], :root a[href^="https://clicks.pipaffiliates.com/"], :root #ad_footer:not([style^="position: absolute; left: -5000px"]), :root app-advertisement, :root a[href^="https://getmatchedlocally.com/"], :root a[href^="https://clickins.slixa.com/"], :root a[href^="https://combodef.com/"], :root a[href^="https://click.hoolig.app/"], :root a[href^="https://track.totalav.com/"], :root a[href^="https://ctrdwm.com/"], :root img[src^="https://images.purevpnaffiliates.com"], :root a[href^="https://porntubemate.com/"], :root a[href^="https://clickadilla.com/"], :root a[href^="https://click.dtiserv2.com/"], :root a[href^="https://www.adxsrve.com/"], :root a[href^="https://click.Ggpickaff.com/"], :root a[href^="https://go.awdeliverynet.com/"], :root a[href^="https://go.xlvirdr.com"], :root a[href^="https://cam4com.go2cloud.org/"], :root a[onclick^="window.location.replace('https://random-affiliate.atimaze.com/"], :root a[href^="https://bongacams2.com/track?"], :root a[href^="https://t.ajrkm1.com/"], :root #main-content a[href^="https://hub.buzzaffiliates.com/"], :root a[href^="https://bongacams10.com/track?"], :root a[href*=".g2afse.com/"], :root a[href^="https://bodelen.com/"], :root a[href^="//hoodingluster.com/"], :root a[href^="https://black77854.com/"], :root a[href^="https://rixofa.com/"], :root a[href^="https://best-experience-cool.com/"], :root [data-taboola-options], :root a[href^="https://believessway.com/"], :root a[href^="https://Click.ggpickaff.com/"], :root a[href^="https://banners.livepartners.com/"], :root a[href^="http://revolvemockerycopper.com/"], :root a[href^="https://awptjmp.com/"], :root a[href^="https://join.sexworld3d.com/track/"], :root a[href^="https://track.cam4tracking.com/"], :root a[href^="https://aweptjmp.com/"], :root a[href^="https://ausoafab.net/"], :root #tabVideo > .rmedia, :root a[href^="https://aj1070.online/"], :root a[href^="https://ads.planetwin365affiliate.com/"], :root a[href^="https://ads.leovegas.com/"], :root a[href^="https://a.medfoodhome.com/"], :root .nya-slot[style], :root a[href^="https://a.bestcontentweb.top/"], :root a[href^="https://adultfriendfinder.com/go/"], :root a[href^="https://a.bestcontentoperation.top/"], :root a[href^="https://a2.adform.net/"], :root a[href^="https://a.candyai.love/"], :root .banner-img > .pbl, :root [data-m-ad-id], :root a[href^="https://a-ads.com/"], :root [data-testid^="section-AdRowBillboard"], :root .ad-placeholder:not(#filter_ads_by_classname):not(#detect_ad_empire):not(#detect):not(.adsbox), :root broadstreet-zone-container, :root a[href^="https://ak.psaltauw.net/"], :root a[href^="https://1winpb.com/"], :root a[href^="https://chaturbate.com/in/?"], :root .home a[href^="https://s.zline0.com/"], :root a[href^="https://prf.hn/click/"][href*="/creativeref:"] > img, :root a[href*="&maxads="], :root a[href^="http://www.adultempire.com/unlimited/promo?"][href*="&partner_id="], :root a[href^="https://1betandgonow.com/"], :root div[id^="optidigital-adslot"], :root [href^="https://wsup.ai/"], :root a[href^="https://123-stream.org/"], :root a[href^="https://in.rabbtrk.com/"], :root a[href^="http://www.h4trck.com/"], :root [href^="https://a.acebet.com/api/click?"], :root #video_player ~ div[id] div[style^="position:fixed;inset:0px;z-index:"], :root a[href^="http://www.friendlyduck.com/AF_"], :root .btn-primary[onclick="showVerification()"], :root a[href^="http://partners.etoro.com/"], :root [href="https://chaturbate.jjgirls.com/"] > img, :root body div#notificationPopup.notificationPopupBlock, :root a[href^="http://cam4com.go2cloud.org/aff_c?"], :root a[href^="https://ads.betfair.com/redirect.aspx?"], :root #leader_ad:not(:empty), :root amp-ad-custom, :root [href^="http://referrer.website/"], :root a[href^="http://trk.globwo.online/"], :root a-ad, :root a[href^="https://offhandpump.com/"], :root a[href^="http://stickingrepute.com/"], :root #slashboxes > .deals-rail, :root [href^="http://mypillow.com/"] > img, :root a[href^="http://bongacams.com/track?"], :root .fp-ui > a[href][target="_blank"][style^="position: absolute; inset: 0px;"], :root a[href^="//startgaming.net/tienda/" i], :root a[href^="https://a.medfoodsafety.com/"], :root a[href^="//go.eabids.com/"], :root a[href^=" https://www.friendlyduck.com/AF_"], :root [data-cl-spot-id], :root a[href*="/jump/next.php?r="], :root #banner728x90:not([style^="position: absolute; left: -5000px"]), :root div[id^="lazyad-"], :root a[href^="http://com-1.pro/"], :root [href^="https://www.profitablegatecpm.com/"], :root a[href*=".cfm?domain="][href*="&fp="], :root #vstr ~ #overlay, :root [id^="section-ad-banner"], :root [id^="ad_slider"], :root html#html[sti][vic][lang] > body#allbody, :root [href^="https://www.onclickperformance.com/"], :root a[href^="https://www.goldenfrog.com/vyprvpn?offer_id="][href*="&aff_id="], :root a[href^="https://wmctjd.com/"], :root a[href*="//jjgirls.com/sex/Chaturbate"], :root [id^="ad-wrap-"], :root a[href^="http://sarcasmadvisor.com/"], :root .ad-slot:not(.adsbox):not(.adsbygoogle), :root [href^="https://www.restoro.com/"], :root [href^="https://www.targetingpartner.com/"], :root .close-btn2[onclick="closeAd2()"], :root a[href^="https://join.virtuallust3d.com/"], :root .section-subheader > .section-hotel-prices-header, :root [href^="https://www.hostg.xyz/"] > img, :root [href*="passtechusa.com"], :root a[href^="https://bngpt.com/"], :root a[href^="http://adultfriendfinder.com/go/"], :root a[href^="https://fastestvpn.com/lifetime-special-deal?a_aid="], :root a[href^="https://tour.mrskin.com/"], :root a[href^="https://s.zlink3.com/"], :root a[href^="http://sneakyadministration.com/"], :root [href^="https://www.brighteonstore.com/products/"] img, :root citrus-ad-wrapper, :root a[href^="https://go.grinsbest.com/"], :root [href^="https://www.avantlink.com/click.php"] img, :root html.canvas > body.wp-singular + div[popover="manual"], :root a[href^="https://t.acam.link/"], :root a[href^="https://go.strpjmp.com/"], :root [href^="https://url.totaladblock.com/"], :root div[id^="ad-position-"], :root a[href^="https://www.toprevenuegate.com/"], :root a[href^="https://bc.game/"], :root a[href^="https://bngprm.com/"], :root [href^="https://shiftnetwork.infusionsoft.com/go/"] > img, :root a[href^="https://trk.softonixs.xyz/"], :root [href^="https://wct.link/click?"], :root [href^="//look.utndln.com/offer"], :root div[data-adunit], :root app-large-ad, :root [href^="https://turtlebids.irauctions.com/"] img, :root a[href^="https://iqbroker.com/"][href*="?aff="], :root .p-post-ad:not(html):not(body), :root #vplayer ~ img[id][onclick], :root [href^="https://rpwmct.com/"], :root a[href^="https://go.cmtaffiliates.com/"], :root [href^="https://mylead.global/stl/"] > img, :root [data-testid="adBanner-wrapper"], :root [href^="https://optimizedelite.com/"] > img, :root a[href^="https://go.rmishe.com/"], :root [href^="https://ilovemyfreedoms.com/landing-"], :root a[href^="https://go.xxxijmp.com"], :root [href^="https://istlnkcl.com/"], :root a[href^="https://go.nordvpn.net/aff"] > img, :root #tongkatlol ~ script[src^="/shrinke/js/"] ~ .main-content-box + .content-box > div[id][style^="position: fixed; display: block; width: 100%;"], :root .\[\&_\.gdprAdTransparencyCogWheelButton\]\:\!pjra-z-\[5\], :root [href^="http://clicks.totemcash.com/"], :root a[href^="https://ad.zanox.com/ppc/"] > img, :root [data-d-ad-id], :root a[href*=".engine.adglare.net/"], :root [class~="mailpoet_form_popup_overlay"], :root a[href^="https://www.brazzersnetwork.com/landing/"], :root a[href^="https://explore-site.com/"], :root .AdBody:not(body), :root [href="https://adstub.net/indo666/"], :root [href^="https://glersakr.com/"], :root a[href^="https://tm-offers.gamingadult.com/"], :root [href^="https://charmingdatings.life/"], :root [data-id^="div-gpt-ad"], :root a[href^="https://tracker.loropartners.com/"], :root [href^="https://awbbjmp.com/"], :root a[href^="https://go.bushheel.com/"], :root a[href^="https://ctjdwm.com/"], :root body > div.mw[role="main"] > .mc, :root a[href^="https://camfapr.com/landing/click/"], :root div[data-ad-wrapper], :root .gnt_em_vp_c[data-g-s="vp_dk"], :root [href="//sexcams.plus/"], :root [href^="http://www.mypillow.com/"] > img, :root a[href^="https://join.virtualtaboo.com/track/"], :root [id^="ad_sky"], :root [name^="google_ads_iframe"], :root [href^="https://go.xlrdr.com"], :root [href*="uselnk.com/"], :root a[href^="https://s.cant3am.com/"], :root .nav-item[href^="https://candyai.gg/"], :root [data-testid^="taboola-"], :root a[href^="https://track.1234sd123.com/"], :root zeus-ad, :root [data-testid="prism-ad-wrapper"], :root [href^="https://antiagingbed.com/discount/"] > img, :root a[href*=".adsrv.eacdn.com/"], :root #teaser1[style^="width:autopx;"], :root [href^="https://www.cloudways.com/en/?id"], :root #modal[doskip][prclck], :root body > .main-wrapper > .main-content > .intro > #checkbox-window, :root [data-uri^="https://s3.amazonaws.com"], :root [href^="https://mypatriotsupply.com/"] > img, :root a[href^="https://go.hpyjmp.com"], :root iframe[scrolling="no"][sandbox*="allow-popups allow-modals"][style^="width: 100%; height: 100%; border: none;"], :root [href^="https://mystore.com/"] > img, :root html[lang] > body.startnew > div#sections > section#section_uname, :root span[data-ez-ph-id], :root [href^="https://track.aftrk1.com/"], :root html[lang] > body:not([style]) > div.captchaBody, :root #adheader:not([style^="position: absolute; left: -5000px"]), :root div[id^="adngin-"], :root [data-rc-widget], :root a[href^="https://stellarcashflow.net/trck/"], :root [data-mobile-ad-id], :root [href^="https://join.playboyplus.com/track/"], :root html > #bw-cf-root, :root [href^="https://go.smljmp.com/"], :root a[href^="https://gamingadlt.com/?offer="], :root a[href^="https://go.bbrdbr.com"], :root a[href^="https://fc.lc/ref/"], :root body.user-clicked[style="cursor: auto;"] > #root > .app-container, :root a[href^="https://pb-imc.com/"], :root a[href^="https://www8.smartadserver.com/"], :root topadblock, :root a[href^="//s.zlinkd.com/"], :root a[href^="https://adclick.g.doubleclick.net/"], :root [data-freestar-ad][id], :root [data-dynamic-ads], :root [data-desktop-ad-id], :root [href^="https://track.wg-aff.com/click"], :root a[href^="https://go.rmhfrtnd.com"], :root [data-asg-ins], :root [data-block-type="ad"], :root [onclick*="content.ad/"], :root [href^="https://go.rdrjmp.com/"], :root a[href^="https://snowdayonline.xyz/"], :root a[href^="https://join.dreamsexworld.com/"], :root a[href^="http://join.brokestraightboys.com/track/"], :root div[id^="div-ads-"], :root [href^="https://rapidgator.net/article/premium/ref/"], :root a[href^="https://track.aftrk3.com/"], :root [href^="https://join3.bannedsextapes.com"], :root [href^="https://join.girlsoutwest.com/"], :root html > body.hold-transition.theme-primary.bg-img[style^="background-image"][style*="wallpaperaccess.com"][style*="background-repeat"][style*="background-size"], :root AMP-AD, :root [data-ad-cls], :root .ad-box:not(#ad-banner):not(:empty), :root body > .wrapper > .card-box > #step-1, :root [data-ez-name], :root a[style="width:100%;height:100%;z-index:10000000000000000;position:absolute;top:0;left:0;"], :root .ob_container .item-container-obpd, :root #ads_top:not(a), :root a[href^="https://go.mnaspm.com/"], :root a[href^="https://service.bv-aff-trx.com/"], :root .ad_slot:not(.text-ad), :root #st-ami + div[id][class*=" "], :root a[href^="https://6-partner.com/"], :root [class^="s2nPlayer"], :root a[href^="https://traffdaq.com/"], :root [data-testid="ad_testID"], :root [href^="https://ad.admitad.com/"], :root [href^="https://mypillow.com/"] > img, :root [data-testid="commercial-label-taboola"], :root a[href^="http://tc.tradetracker.net/"] > img, :root [class^="amp-ad-"], :root .ad_unit:not(.text-ad, .adsbox), :root [href="https://clickaine.com"], :root #playerOverlay[style="position:absolute; z-index:3"], :root a[href^="https://www.liquidfire.mobi/"], :root .grid > .container > #aside-promotion, :root DFP-AD, :root #hero + div.marquee-wrap + section#games + section#features + #download, :root #ads-banner:not([style^="position: absolute; left: -5000px"]), :root AD-SLOT, :root a[href^="https://www.googleadservices.com/pagead/aclk?"] > img, :root body > .security-container[style="opacity: 1; transform: translateY(0px);"], :root a[href^="https://a.bestcontentfood.top/"], :root #kt_player > a[target="_blank"], :root [href^="https://zone.gotrackier.com/"], :root .ad-area:not(.text-ad), :root a[href^="https://ab.advertiserurl.com/aff/"], :root #adSpecial:not(:empty), :root a[data-oburl^="https://paid.outbrain.com/network/redir?"], :root .sidebar-ad:not(.adsbygoogle), :root a[href^="https://s.zlinkn.com/"], :root a[href^="https://go.xxxvjmp.com/"], :root .ads_container:not(.text-ad), :root [class^="adDisplay-module"], :root div[style^="z-index: 999999; background-image: url(\"data:image/gif;base64,"][style$="position: absolute;"], :root [href^="https://affiliate.fastcomet.com/"] > img, :root a[href^="https://t.ajrkm3.com/"], :root in-page-message[doskip], :root [href^="https://aads.com/campaigns/"], :root a[href^="https://juicyads.in/"], :root #ad_728:not([style^="position: absolute; left: -5000px"]), :root div[id^="apn_native_ad_slot_"], :root .adhesion:not(body), :root body > div.captcha-container > div.captcha-card, :root ad-shield-ads, :root a[href^="https://hot-growngames.life/"], :root .ad_box:not(.text-ad), :root [href^="https://wap4dollar.com/ad/nonadult/serve.php"], :root [href="https://jdrucker.com/gold"] > img, :root .fp-player > div[style="position: absolute; inset: 0px; overflow: hidden; z-index: 160; background: transparent; display: block;"], :root .ad-wrap:not(#google_ads_iframe_checktag), :root a[href^="https://www.friendlyduck.com/AF_"], :root html[lang="tr"] #aa-wp + .fixed-footer .footer-ad-container, :root [href^="https://ad1.adfarm1.adition.com/"], :root #teaser3[style^="width:autopx;"], :root a[href^="https://gml-grp.com/"], :root a[href^="https://activate-game.com/"], :root .ob_dual_right > .ob_ads_header ~ .odb_div, :root a[href^="https://wittered-mainging.com/"], :root div[id][style^="position: fixed; inset: 0px; z-index: 2147483647; background: black"][style*="opacity: 0.01"], :root #teaser3[style="width: 100%;text-align: center;display: scroll;position:fixed;bottom: 0;margin: 0 auto;z-index: 103;"], :root html[lang="tr"] > body.has-footer-ad.has-pageskin-desktop a.pageskin-click-left, :root [data-revive-zoneid], :root a[href^="https://go.skinstrip.net"][href*="?campaignId="], :root figure.movie-detail-banner div[style="position: absolute; top: 0px; left: 0px; width: 100%; height: 100%; z-index: 999; cursor: pointer;"], :root #teaser2[style^="width:autopx;"], :root a[href^="https://losingoldfry.com/"], :root #player div[style$="cursor: pointer; position: absolute; width: 100%; height: 100%; padding: 1rem; z-index: 2147483647;"], :root div[style="position: fixed; inset: 0px; z-index: 2147483647; pointer-events: auto;"], :root .scroll-fixable.rail-right > .deals-rail, :root div[id^="adrotate_widgets-"], :root .Ad-Container:not(.adsbygoogle) { display: none !important; }</style></head><body>
+<title>Strand Survival Knapsack</title>
+<style>
+  :root {
+    --bg: #f5f6f1;
+    --surface: #e9ebe3;
+    --surface-2: #dfe2d8;
+    --line: #c9cec0;
+    --ink: #1c231d;
+    --ink-muted: #57624f;
+    --ink-faint: #7c8672;
+    --accent: #0e7c72;
+    --accent-ink: #063f3a;
+    --accent-tint: #d8ece9;
+    --accent-border: #9bcbc4;
+    --warn: #a85338;
+    --warn-tint: #f1ded4;
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: "JetBrains Mono", "SF Mono", ui-monospace, "Cascadia Code", Consolas, "Liberation Mono", monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #11150f;
+      --surface: #1a2018;
+      --surface-2: #212a1d;
+      --line: #333e2c;
+      --ink: #e7ebe0;
+      --ink-muted: #a5b096;
+      --ink-faint: #77826a;
+      --accent: #4fd6c4;
+      --accent-ink: #d9fbf4;
+      --accent-tint: #17332e;
+      --accent-border: #2f6e64;
+      --warn: #e2967a;
+      --warn-tint: #3a2620;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #11150f;
+    --surface: #1a2018;
+    --surface-2: #212a1d;
+    --line: #333e2c;
+    --ink: #e7ebe0;
+    --ink-muted: #a5b096;
+    --ink-faint: #77826a;
+    --accent: #4fd6c4;
+    --accent-ink: #d9fbf4;
+    --accent-tint: #17332e;
+    --accent-border: #2f6e64;
+    --warn: #e2967a;
+    --warn-tint: #3a2620;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: 17px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+  .page {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 4rem 1.5rem 6rem;
+  }
+
+  .eyebrow {
+    font-family: var(--sans);
+    font-size: 0.72rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent-ink);
+    background: var(--accent-tint);
+    display: inline-block;
+    padding: 0.28em 0.7em;
+    border-radius: 3px;
+    font-weight: 600;
+  }
+
+  h1 {
+    font-family: var(--serif);
+    font-weight: 600;
+    font-size: 2.4rem;
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+    margin: 0.6em 0 0.15em;
+    color: var(--ink);
+  }
+  .dek {
+    font-family: var(--sans);
+    font-size: 1.05rem;
+    color: var(--ink-muted);
+    max-width: 34em;
+    text-wrap: balance;
+    margin: 0 0 2.4rem;
+  }
+
+  .abstract {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 1.3rem 1.5rem;
+    margin: 0 0 3rem;
+    font-size: 0.97rem;
+    color: var(--ink-muted);
+  }
+  .abstract strong { color: var(--ink); font-weight: 600; }
+
+  h2 {
+    font-family: var(--serif);
+    font-size: 1.35rem;
+    font-weight: 600;
+    color: var(--ink);
+    margin: 3.2rem 0 0.3rem;
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+  }
+  h2 .num {
+    font-family: var(--mono);
+    font-size: 0.85rem;
+    color: var(--accent);
+    font-weight: 600;
+  }
+  h3 {
+    font-family: var(--sans);
+    font-size: 0.85rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    font-weight: 600;
+    margin: 1.9rem 0 0.6rem;
+  }
+
+  p { margin: 0.9rem 0; }
+  .lede { color: var(--ink-muted); font-size: 0.97rem; }
+
+  code, .inline-code {
+    font-family: var(--mono);
+    font-size: 0.88em;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 0.08em 0.35em;
+  }
+
+  .eq-block {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin: 1.1rem 0;
+    padding: 0.7rem 1.1rem;
+    background: var(--surface);
+    border-left: 3px solid var(--accent);
+    border-radius: 0 4px 4px 0;
+    overflow-x: auto;
+  }
+  .eq-block math { flex: 1; min-width: 0; }
+  .eq-tag {
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    color: var(--ink-faint);
+    white-space: nowrap;
+  }
+  math { font-size: 1.08rem; color: var(--ink); }
+
+  .callout {
+    background: var(--accent-tint);
+    border: 1px solid var(--accent-border);
+    border-radius: 6px;
+    padding: 1rem 1.3rem;
+    margin: 1.3rem 0;
+    font-size: 0.94rem;
+    color: var(--ink);
+  }
+  .callout .label {
+    font-family: var(--sans);
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--accent-ink);
+    font-weight: 700;
+    display: block;
+    margin-bottom: 0.35em;
+  }
+
+  figure {
+    margin: 2rem 0;
+    padding: 1.2rem 1.2rem 1rem;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+  }
+  figure svg { width: 100%; height: auto; display: block; }
+  figcaption {
+    font-family: var(--sans);
+    font-size: 0.83rem;
+    color: var(--ink-muted);
+    margin-top: 0.7rem;
+    line-height: 1.5;
+  }
+
+  pre.algo {
+    font-family: var(--mono);
+    font-size: 0.83rem;
+    line-height: 1.7;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 1.1rem 1.3rem;
+    overflow-x: auto;
+    color: var(--ink);
+    margin: 1.2rem 0;
+  }
+  pre.algo .kw { color: var(--accent-ink); font-weight: 600; }
+  pre.algo .cm { color: var(--ink-faint); font-style: italic; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+    margin: 1.2rem 0;
+  }
+  caption {
+    text-align: left;
+    font-family: var(--sans);
+    font-size: 0.8rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin-bottom: 0.5em;
+    font-weight: 600;
+  }
+  th, td {
+    text-align: left;
+    padding: 0.5em 0.8em;
+    border-bottom: 1px solid var(--line);
+    font-variant-numeric: tabular-nums;
+  }
+  th {
+    font-family: var(--sans);
+    font-size: 0.76rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    font-weight: 600;
+  }
+  td.num, th.num { text-align: right; }
+  td code { background: none; border: none; padding: 0; }
+
+  .table-wrap { overflow-x: auto; }
+
+  hr.div {
+    border: none;
+    border-top: 1px solid var(--line);
+    margin: 3.5rem 0 2.5rem;
+  }
+
+  footer {
+    font-family: var(--sans);
+    font-size: 0.82rem;
+    color: var(--ink-faint);
+  }
+  footer h3 { margin-top: 0; }
+  footer ul { margin: 0.4rem 0; padding-left: 1.2rem; }
+  footer li { margin: 0.3rem 0; }
+  footer code { font-size: 0.85em; }
+
+  ::selection { background: var(--accent-tint); color: var(--ink); }
+</style>
+
+<div class="page">
+  <span class="eyebrow">seq‑ptp‑choice‑k · model note</span>
+  <h1>The Strand Survival Knapsack</h1>
+  <p class="dek">How <code class="inline-code">seq-ptp-choice-k</code> turns a branching-process model of per-strand token acceptance into a knapsack over strand lengths — the math behind <code class="inline-code">proposals()</code> in <code class="inline-code">src/ptp/lit.py</code> and <code class="inline-code">_greedy_optimal_lengths</code> in <code class="inline-code">scripts/inference.py</code>.</p>
+
+  <div class="abstract">
+    <strong>In one line:</strong> each candidate strand's accepted-token count is modeled as an extinction time of a shared-frailty branching process; because that frailty acts identically on any subset of surviving strands, the expected total accepted tokens splits into one term per depth, and choosing how long to make each of the <code class="inline-code">k</code> strands becomes a knapsack — items are whole strands, cost is length, value is the depth-separable survival gain, solved exactly by dynamic programming over depth.
+  </div>
+
+  <h2><span class="num">1</span> The generative model</h2>
+  <p>Start with <code class="inline-code">K</code> candidate strands (the choice-k ensemble size, or <code class="inline-code">K=1</code> for plain <code class="inline-code">seq-ptp</code>). At each depth — generation — <var>i</var> = 1, 2, …, a shared frailty is drawn and thins whatever strands are still alive:</p>
+
+  <div class="eq-block">
+    <math display="block">
+      <mrow>
+        <msub><mi>Θ</mi><mi>i</mi></msub><mo>∼</mo><mtext>Beta</mtext><mo>(</mo><mi>α</mi><mo>,</mo><mi>β</mi><mo>)</mo>
+        <mo>,</mo><mspace width="0.6em"></mspace>
+        <msub><mi>S</mi><mi>i</mi></msub><mo>∣</mo><msub><mi>S</mi><mrow><mi>i</mi><mo>−</mo><mn>1</mn></mrow></msub><mo>=</mo><mi>m</mi><mo>,</mo><msub><mi>Θ</mi><mi>i</mi></msub>
+        <mo>∼</mo><mtext>Binomial</mtext><mo>(</mo><mi>m</mi><mo>,</mo><msub><mi>Θ</mi><mi>i</mi></msub><mo>)</mo>
+      </mrow>
+    </math>
+    <span class="eq-tag">1.1</span>
+  </div>
+
+  <p><math><mrow><msub><mi>Θ</mi><mi>i</mi></msub></mrow></math> is redrawn every generation but shared across <em>all</em> strands alive that round — that shared draw is what correlates strands within a generation. Marginalizing it out gives a Beta-Binomial transition, and</p>
+
+  <div class="eq-block">
+    <math display="block">
+      <mrow>
+        <mi>T</mi><mo>=</mo><mo>min</mo><mo>{</mo><mi>i</mi><mo>≥</mo><mn>1</mn><mo>:</mo><msub><mi>S</mi><mi>i</mi></msub><mo>=</mo><mn>0</mn><mo>}</mo>
+        <mo>,</mo><mspace width="0.8em"></mspace>
+        <mi>G</mi><mo>=</mo><mn>1</mn><mo>+</mo><mi>T</mi>
+      </mrow>
+    </math>
+    <span class="eq-tag">1.2</span>
+  </div>
+
+  <p class="lede"><var>T</var> (extinction time) is the number of generations until every strand has failed verification; <var>G</var>, accepted tokens per call, is <var>T</var> plus a guaranteed first-token floor.</p>
+
+  <h3>Reparametrization</h3>
+  <p>Work in <math><mrow><mo>(</mo><msub><mi>π</mi><mn>0</mn></msub><mo>,</mo><mi>p</mi><mo>,</mo><mi>ρ</mi><mo>)</mo></mrow></math> — <var>p</var> is the marginal per-strand success probability, <var>ρ</var> the pairwise correlation between two strands in the same generation:</p>
+
+  <div class="eq-block">
+    <math display="block">
+      <mrow>
+        <mi>ν</mi><mo>=</mo><mfrac><mrow><mn>1</mn><mo>−</mo><mi>ρ</mi></mrow><mi>ρ</mi></mfrac>
+        <mo>,</mo><mspace width="0.6em"></mspace>
+        <mi>α</mi><mo>=</mo><mi>p</mi><mi>ν</mi>
+        <mo>,</mo><mspace width="0.6em"></mspace>
+        <mi>β</mi><mo>=</mo><mo>(</mo><mn>1</mn><mo>−</mo><mi>p</mi><mo>)</mo><mi>ν</mi>
+      </mrow>
+    </math>
+    <span class="eq-tag">1.3</span>
+  </div>
+
+  <h3>Zero-inflation</h3>
+  <p>A pure Beta-Binomial makes total first-round wipeout vanish as <var>K</var> grows, which the data contradicts — <math><mrow><mi>P</mi><mo>(</mo><mi>T</mi><mo>=</mo><mn>1</mn><mo>)</mo></mrow></math> plateaus at a nonzero floor. Give the frailty a point mass at zero:</p>
+
+  <div class="eq-block">
+    <math display="block">
+      <mrow>
+        <mi>Θ</mi><mo>∼</mo><msub><mi>π</mi><mn>0</mn></msub><msub><mi>δ</mi><mn>0</mn></msub><mo>+</mo><mo>(</mo><mn>1</mn><mo>−</mo><msub><mi>π</mi><mn>0</mn></msub><mo>)</mo><mtext>Beta</mtext><mo>(</mo><mi>α</mi><mo>,</mo><mi>β</mi><mo>)</mo>
+      </mrow>
+    </math>
+    <span class="eq-tag">1.4</span>
+  </div>
+
+  <p class="lede">With probability <math><msub><mi>π</mi><mn>0</mn></msub></math> the round is a guaranteed total wipeout no matter how many strands are alive — a high-entropy position no ensemble size rescues.</p>
+
+  <div class="callout">
+    <span class="label">v3 fit — hard-coded in <code class="inline-code">SeqPTPChoiceKInference</code></span>
+    Generation 1 is exempt from zero-inflation (pure Beta-Binomial); generations 2 through <code class="inline-code">cap_t−1</code> use a constant <math><msub><mi>π</mi><mn>0</mn></msub></math>; generation <code class="inline-code">cap_t</code> (= <code class="inline-code">tokens_per_student_call</code>) is a forced death, reflecting the hard proposal-length cap. Joint-MLE fit: <math><mrow><msub><mi>π</mi><mn>0</mn></msub><mo>=</mo><mn>0.0616</mn></mrow></math>, <math><mrow><mi>p</mi><mo>=</mo><mn>0.713</mn></mrow></math>, <math><mrow><mi>ρ</mi><mo>=</mo><mn>0.858</mn></mrow></math> — see <code class="inline-code">_BRANCH_PI0</code> / <code class="inline-code">_BRANCH_P</code> / <code class="inline-code">_BRANCH_RHO</code>.
+  </div>
+
+  <h2><span class="num">2</span> Expected accepted tokens</h2>
+  <p>No closed form for <math><mrow><mi>E</mi><mo>[</mo><mi>T</mi><mo>]</mo></mrow></math> in general, but the tail-sum identity makes it a cheap numerical propagation through the transition matrix:</p>
+
+  <div class="eq-block">
+    <math display="block">
+      <mrow>
+        <mi>E</mi><mo>[</mo><mi>T</mi><mo>]</mo><mo>=</mo>
+        <munderover><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>0</mn></mrow><mi>∞</mi></munderover>
+        <mi>P</mi><mo>(</mo><msub><mi>S</mi><mi>i</mi></msub><mo>&gt;</mo><mn>0</mn><mo>)</mo>
+      </mrow>
+    </math>
+    <span class="eq-tag">2.1</span>
+  </div>
+
+  <p>This is exactly <code class="inline-code">_branch_survival_table</code>: it builds a table <math><mrow><mi>S</mi><mo>[</mo><mi>w</mi><mo>,</mo><mi>d</mi><mo>]</mo></mrow></math> giving the survival probability of a homogeneous run started with <var>w</var> strands, for every depth <var>d</var> up to <code class="inline-code">cap_t</code>. That table is the object everything below is built from.</p>
+
+  <h2><span class="num">3</span> Why strand length choice separates by depth</h2>
+  <p>Choice-k strands don't all have to share one length. Define the <strong>width profile</strong>:</p>
+
+  <div class="eq-block">
+    <math display="block">
+      <mrow>
+        <mi>W</mi><mo>(</mo><mi>d</mi><mo>)</mo><mo>:=</mo><mo>#</mo><mo>{</mo><mi>s</mi><mo>:</mo><msub><mi>L</mi><mi>s</mi></msub><mo>≥</mo><mi>d</mi><mo>}</mo>
+      </mrow>
+    </math>
+    <span class="eq-tag">3.1</span>
+  </div>
+
+  <p>— the number of strands whose <em>own</em> chosen length budget still reaches depth <var>d</var>. The move that makes this tractable: because <math><msub><mi>Θ</mi><mi>d</mi></msub></math> applies i.i.d.-conditionally to every strand present that round, <em>any fixed subset</em> of a surviving population is itself Beta-Binomial with the same <math><mrow><mo>(</mo><mi>α</mi><mo>,</mo><mi>β</mi><mo>)</mo></mrow></math> — a standard thinning property. So the subpopulation still alive <em>and</em> still within its own budget at depth <var>d</var> is distributed exactly as a fresh homogeneous run started with <math><mrow><mi>W</mi><mo>(</mo><mi>d</mi><mo>)</mo></mrow></math> strands, carried out for <math><mrow><mi>d</mi><mo>−</mo><mn>1</mn></mrow></math> steps — independent of every other depth:</p>
+
+  <div class="eq-block">
+    <math display="block">
+      <mrow>
+        <mi>E</mi><mo>[</mo><mi>T</mi><mo>]</mo><mo>=</mo>
+        <munder><mo>∑</mo><mi>d</mi></munder>
+        <mi>S</mi><mo>[</mo><mi>W</mi><mo>(</mo><mi>d</mi><mo>)</mo><mo>,</mo><mi>d</mi><mo>]</mo>
+      </mrow>
+    </math>
+    <span class="eq-tag">3.2</span>
+  </div>
+
+  <p class="lede">Expected accepted tokens is now a sum of terms that each depend on the width profile at <em>one</em> depth — which is exactly what makes the strand-length choice a separable, knapsack-shaped problem.</p>
+
+  <figure>
+    <svg viewBox="0 0 640 300" role="img" aria-label="Five chosen strand lengths, drawn as bars of length 8, 8, 5, 5, and 3 nodes, produce a width profile W(d) of 5, 5, 5, 4, 4, 2, 2, 2 across depths 1 through 8 — the count of bars spanning each depth column." style="color:var(--ink); font-family:var(--sans)">
+      <text x="20" y="18" font-size="12" style="fill:var(--ink-faint)" letter-spacing="0.04em">CHOSEN STRAND LENGTHS — ITEM COST = LENGTH</text>
+
+      <!-- column gridlines, d=0..8 -->
+      <g style="stroke:var(--line)" stroke-width="1">
+        <line x1="110" y1="26" x2="110" y2="270"></line>
+        <line x1="165" y1="26" x2="165" y2="270"></line>
+        <line x1="220" y1="26" x2="220" y2="270"></line>
+        <line x1="275" y1="26" x2="275" y2="270"></line>
+        <line x1="330" y1="26" x2="330" y2="270"></line>
+        <line x1="385" y1="26" x2="385" y2="270"></line>
+        <line x1="440" y1="26" x2="440" y2="270"></line>
+        <line x1="495" y1="26" x2="495" y2="270"></line>
+        <line x1="550" y1="26" x2="550" y2="270"></line>
+      </g>
+
+      <!-- strand bars -->
+      <g style="stroke:var(--accent)" stroke-width="7" stroke-linecap="round">
+        <line x1="110" y1="36" x2="550" y2="36"></line>
+        <line x1="110" y1="58" x2="550" y2="58"></line>
+        <line x1="110" y1="80" x2="385" y2="80"></line>
+        <line x1="110" y1="102" x2="385" y2="102"></line>
+        <line x1="110" y1="124" x2="275" y2="124"></line>
+      </g>
+      <g font-family="var(--mono)" font-size="11" style="fill:var(--ink-muted)" text-anchor="end">
+        <text x="100" y="40">L=8</text>
+        <text x="100" y="62">L=8</text>
+        <text x="100" y="84">L=5</text>
+        <text x="100" y="106">L=5</text>
+        <text x="100" y="128">L=3</text>
+      </g>
+
+      <text x="20" y="192" font-size="12" style="fill:var(--ink-faint)" letter-spacing="0.04em">→ WIDTH PROFILE W(d): STRANDS STILL BUDGETED AT DEPTH d</text>
+
+      <!-- W(d) bars: 5,5,5,4,4,2,2,2 scale 14px/unit, baseline y=270 -->
+      <g style="fill:var(--ink-muted)">
+        <rect x="120" y="200" width="35" height="70"></rect>
+        <rect x="175" y="200" width="35" height="70"></rect>
+        <rect x="230" y="200" width="35" height="70"></rect>
+        <rect x="285" y="214" width="35" height="56"></rect>
+        <rect x="340" y="214" width="35" height="56"></rect>
+        <rect x="395" y="242" width="35" height="28"></rect>
+        <rect x="450" y="242" width="35" height="28"></rect>
+        <rect x="505" y="242" width="35" height="28"></rect>
+      </g>
+      <g font-family="var(--mono)" font-size="11" style="fill:var(--ink)" text-anchor="middle">
+        <text x="137" y="194">5</text>
+        <text x="192" y="194">5</text>
+        <text x="247" y="194">5</text>
+        <text x="302" y="208">4</text>
+        <text x="357" y="208">4</text>
+        <text x="412" y="236">2</text>
+        <text x="467" y="236">2</text>
+        <text x="522" y="236">2</text>
+      </g>
+
+      <line x1="110" y1="270" x2="550" y2="270" stroke="currentColor" stroke-width="1.5"></line>
+      <g font-family="var(--mono)" font-size="11" style="fill:var(--ink-faint)" text-anchor="middle">
+        <text x="137" y="284">1</text>
+        <text x="192" y="284">2</text>
+        <text x="247" y="284">3</text>
+        <text x="302" y="284">4</text>
+        <text x="357" y="284">5</text>
+        <text x="412" y="284">6</text>
+        <text x="467" y="284">7</text>
+        <text x="522" y="284">8</text>
+      </g>
+      <text x="330" y="298" font-size="11" style="fill:var(--ink-faint)" text-anchor="middle">depth d</text>
+    </svg>
+    <figcaption>Five strands of lengths 8, 8, 5, 5, 3 (top, total cost 29 nodes) produce the width profile <math><mrow><mi>W</mi><mo>(</mo><mi>d</mi><mo>)</mo></mrow></math> = 5, 5, 5, 4, 4, 2, 2, 2 (bottom). Buying a length-<var>L</var> strand is a bundled purchase: it raises the width at every depth 1…<var>L</var> at once, which is why an item in the knapsack below is a whole strand, not a single node.</figcaption>
+  </figure>
+
+  <h2><span class="num">4</span> The knapsack</h2>
+  <p>Choosing <var>k</var> strand lengths <math><mrow><msub><mi>L</mi><mn>1</mn></msub><mo>,</mo><mo>…</mo><mo>,</mo><msub><mi>L</mi><mi>k</mi></msub></mrow></math> to maximize expected accepted tokens under a fixed node budget is now:</p>
+
+  <div class="eq-block">
+    <math display="block">
+      <mtable>
+        <mtr>
+          <mtd>
+            <munder><mo>max</mo><mrow><msub><mi>L</mi><mn>1</mn></msub><mo>,…,</mo><msub><mi>L</mi><mi>k</mi></msub></mrow></munder>
+          </mtd>
+          <mtd>
+            <munderover><mo>∑</mo><mrow><mi>d</mi><mo>=</mo><mn>1</mn></mrow><mtext>cap_t</mtext></munderover>
+            <mi>S</mi><mo>[</mo><mi>W</mi><mo>(</mo><mi>d</mi><mo>)</mo><mo>,</mo><mi>d</mi><mo>]</mo>
+          </mtd>
+        </mtr>
+        <mtr>
+          <mtd><mtext>s.t.</mtext></mtd>
+          <mtd>
+            <munderover><mo>∑</mo><mrow><mi>s</mi><mo>=</mo><mn>1</mn></mrow><mi>k</mi></munderover>
+            <msub><mi>L</mi><mi>s</mi></msub><mo>≤</mo><mtext>budget</mtext>
+          </mtd>
+        </mtr>
+      </mtable>
+    </math>
+    <span class="eq-tag">4.1</span>
+  </div>
+
+  <p class="lede">with <math><mrow><mi>W</mi><mo>(</mo><mi>d</mi><mo>)</mo><mo>=</mo><munderover><mo>∑</mo><mrow><mi>s</mi><mo>=</mo><mn>1</mn></mrow><mi>k</mi></munderover><msub><mn>1</mn><mrow><mo>[</mo><msub><mi>L</mi><mi>s</mi></msub><mo>≥</mo><mi>d</mi><mo>]</mo></mrow></msub></mrow></math> as in §3. <strong>Items</strong> are whole strands of length <var>L</var>; <strong>cost</strong> is <var>L</var> (it bumps width at every depth 1…<var>L</var> together, per the figure above); <strong>budget</strong> is <math><mrow><mi>k</mi><mo>⋅</mo><mtext>tokens_per_student_call</mtext></mrow></math> by default, or less when a mode reserves part of it for guaranteed full-length strands.</p>
+
+  <h2><span class="num">5</span> Exact solver</h2>
+  <p>The feasible width profiles are exactly the nonincreasing integer sequences <math><mrow><mi>W</mi><mo>(</mo><mn>1</mn><mo>)</mo><mo>≥</mo><mo>…</mo><mo>≥</mo><mi>W</mi><mo>(</mo><mtext>cap_t</mtext><mo>)</mo><mo>≥</mo><mn>0</mn></mrow></math> — any such sequence decomposes into <math><mrow><mi>W</mi><mo>(</mo><mi>d</mi><mo>)</mo><mo>−</mo><mi>W</mi><mo>(</mo><mi>d</mi><mo>+</mo><mn>1</mn><mo>)</mo></mrow></math> strands of length <var>d</var>, via the standard nonincreasing-sequence↔partition correspondence, so this is a DP over depth rather than a heuristic:</p>
+
+  <div class="eq-block">
+    <math display="block">
+      <mrow>
+        <msub><mi>V</mi><mi>d</mi></msub><mo>[</mo><msub><mi>w</mi><mtext>cap</mtext></msub><mo>,</mo><mi>b</mi><mo>]</mo><mo>=</mo>
+        <munder><mo>max</mo><mrow><mn>0</mn><mo>≤</mo><mi>w</mi><mo>≤</mo><mo>min</mo><mo>(</mo><msub><mi>w</mi><mtext>cap</mtext></msub><mo>,</mo><mi>b</mi><mo>)</mo></mrow></munder>
+        <mi>S</mi><mo>[</mo><mi>w</mi><mo>,</mo><mi>d</mi><mo>]</mo><mo>+</mo><msub><mi>V</mi><mrow><mi>d</mi><mo>+</mo><mn>1</mn></mrow></msub><mo>[</mo><mi>w</mi><mo>,</mo><mi>b</mi><mo>−</mo><mi>w</mi><mo>]</mo>
+      </mrow>
+    </math>
+    <span class="eq-tag">5.1</span>
+  </div>
+
+  <p class="lede"><math><mrow><msub><mi>V</mi><mi>d</mi></msub><mo>[</mo><msub><mi>w</mi><mtext>cap</mtext></msub><mo>,</mo><mi>b</mi><mo>]</mo></mrow></math> is the best achievable <math><mrow><munderover><mo>∑</mo><mrow><mi>d</mi><mi>′</mi><mo>=</mo><mi>d</mi></mrow><mtext>cap_t</mtext></munderover><mi>S</mi><mo>[</mo><mi>W</mi><mo>(</mo><mi>d</mi><mi>′</mi><mo>)</mo><mo>,</mo><mi>d</mi><mi>′</mi><mo>]</mo></mrow></math> given <math><mrow><mi>W</mi><mo>(</mo><mi>d</mi><mo>)</mo><mo>≤</mo><msub><mi>w</mi><mtext>cap</mtext></msub></mrow></math> and remaining budget <var>b</var>, with <math><mrow><msub><mi>V</mi><mrow><mtext>cap_t</mtext><mo>+</mo><mn>1</mn></mrow></msub><mo>=</mo><mn>0</mn></mrow></math>; the width bound doubles until the optimum stops touching it, so the answer is exact at any budget.</p>
+
+  <pre class="algo"><span class="cm"># _exact_optimal_lengths / _solve_width_profile — scripts/inference.py:1932</span>
+w_max ← a generous initial guess
+<span class="kw">repeat</span>:
+    surv ← branch_survival_table(w_max, cap_t)   <span class="cm"># S[w,d], d=1..cap_t</span>
+    <span class="kw">for</span> d = cap_t <span class="kw">downto</span> 1:  <span class="cm"># fill V_d from V_{d+1} via eq. 5.1</span>
+        V[d] ← max over w of S[w,d] + V[d+1][w, · − w]
+    W(1..cap_t) ← trace back the argmax w at each depth
+    <span class="kw">if</span> W(1) &lt; w_max: <span class="kw">break</span>
+    w_max ← 2 · w_max                       <span class="cm"># bound was too tight — retry</span>
+<span class="kw">return</span> W(d) − W(d+1) strands of length d, for each d</pre>
+
+  <div class="callout">
+    <span class="label">Superseded: the greedy heuristic</span>
+    This section originally described a bundled-knapsack <em>greedy</em>: repeatedly buy whichever whole strand maximizes gain(L)/L, where <math><mrow><mtext>gain</mtext><mo>(</mo><mi>L</mi><mo>)</mo><mo>=</mo><munderover><mo>∑</mo><mrow><mi>d</mi><mo>=</mo><mn>1</mn></mrow><mi>L</mi></munderover><mo>[</mo><mi>S</mi><mo>[</mo><mi>W</mi><mo>(</mo><mi>d</mi><mo>)</mo><mo>+</mo><mn>1</mn><mo>,</mo><mi>d</mi><mo>]</mo><mo>−</mo><mi>S</mi><mo>[</mo><mi>W</mi><mo>(</mo><mi>d</mi><mo>)</mo><mo>,</mo><mi>d</mi><mo>]</mo><mo>]</mo></mrow></math>. It was not provably optimal, just close in practice (within 0.015% of exact by k=50) — the DP above has since replaced it in <code class="inline-code">SeqPTPChoiceKInference</code>, at some extra one-time construction cost since <code class="inline-code">_exact_optimal_lengths</code> runs once per <code class="inline-code">__init__</code>, not per proposal round.
+  </div>
+
+  <h3>Mode variants</h3>
+  <div class="table-wrap">
+  <table>
+    <caption>SeqPTPChoiceKInference modes</caption>
+    <thead><tr><th>mode</th><th>full-length reserve</th><th>remaining budget</th></tr></thead>
+    <tbody>
+      <tr><td><code>standard</code></td><td class="num">—</td><td>all <var>k</var> strands at full <code>n_prop</code> depth, no optimization</td></tr>
+      <tr><td><code>balanced</code></td><td class="num">1 strand</td><td>heuristic split: <code>k/4</code> at half depth, rest at quarter depth</td></tr>
+      <tr><td><code>optimal</code></td><td class="num">0%</td><td>entire budget through the exact solver</td></tr>
+      <tr><td><code>optimal-25</code></td><td class="num">25%</td><td>remainder through the exact solver</td></tr>
+      <tr><td><code>optimal-50</code></td><td class="num">50%</td><td>remainder through the exact solver</td></tr>
+      <tr><td><code>optimal-75</code></td><td class="num">75%</td><td>remainder through the exact solver</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="lede">The reserved fraction buys guaranteed full-depth fallback strands — the same role <code class="inline-code">balanced</code> mode's one long strand plays — before the solver spends the rest on whatever length profile maximizes <math><mrow><mi>E</mi><mo>[</mo><mi>T</mi><mo>]</mo></mrow></math>.</p>
+
+  <h3>Empirical results — vicuna, 100-question runs</h3>
+  <div class="table-wrap">
+  <table>
+    <caption>Model E[G] vs. observed, by run</caption>
+    <thead>
+      <tr>
+        <th>run</th><th class="num">k</th><th>mode</th>
+        <th class="num">E[G]<br>(model)</th><th class="num">tokens/<br>decision</th>
+        <th class="num">nodes/<br>call</th><th class="num">nodes/<br>decision</th><th class="num">strands/<br>decision</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td><code>choice-1</code></td><td class="num">1</td><td>standard</td><td class="num">4.15</td><td class="num">4.15</td><td class="num">20</td><td class="num">20</td><td class="num">1</td></tr>
+      <tr><td><code>choice-5</code></td><td class="num">5</td><td>standard</td><td class="num">4.69</td><td class="num">4.93</td><td class="num">100</td><td class="num">100</td><td class="num">5</td></tr>
+      <tr><td><code>choice-50</code> <em>(archived)</em></td><td class="num">50</td><td>standard</td><td class="num">5.35</td><td class="num">5.55</td><td class="num">∼1000</td><td class="num">∼1,000</td><td class="num">50</td></tr>
+      <tr><td><code>choice-50-optimal</code></td><td class="num">50</td><td>optimal</td><td class="num">5.43</td><td class="num">5.18</td><td class="num">1000</td><td class="num">1,000</td><td class="num">92</td></tr>
+      <tr><td><code>choice-50-optimal-25</code></td><td class="num">50</td><td>optimal-25</td><td class="num">5.42</td><td class="num">5.48</td><td class="num">1000</td><td class="num">1,000</td><td class="num">83</td></tr>
+      <tr><td><code>choice-50-optimal-50</code></td><td class="num">50</td><td>optimal-50</td><td class="num">5.41</td><td class="num">5.51</td><td class="num">1000</td><td class="num">1,000</td><td class="num">73</td></tr>
+      <tr><td><code>choice-50-optimal-75</code></td><td class="num">50</td><td>optimal-75</td><td class="num">5.38</td><td class="num">5.45</td><td class="num">1000</td><td class="num">1,000</td><td class="num">64</td></tr>
+      <tr><td><code>choice-50-balanced</code></td><td class="num">50</td><td>balanced</td><td class="num">5.05</td><td class="num">5.23</td><td class="num">325</td><td class="num">325</td><td class="num">50</td></tr>
+      <tr><td><code>choice-200-balanced</code></td><td class="num">200</td><td>balanced</td><td class="num">5.35</td><td class="num">5.63</td><td class="num">1265</td><td class="num">1,265</td><td class="num">200</td></tr>
+      <tr><td><code>n-choice-50</code></td><td class="num">50</td><td>n-step</td><td class="num">5.35</td><td class="num">5.52</td><td class="num">1000</td><td class="num">1,000</td><td class="num">50</td></tr>
+      <tr><td><code>n-choice-250</code></td><td class="num">250</td><td>n-step</td><td class="num">5.78</td><td class="num">5.61</td><td class="num">1000</td><td class="num">5,000</td><td class="num">250</td></tr>
+      <tr><td><code>n-choice-1000</code></td><td class="num">1000</td><td>n-step</td><td class="num">6.14</td><td class="num">6.35</td><td class="num">1000</td><td class="num">20,000</td><td class="num">1000</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="lede">E[G] is §3's <math><mrow><mi>E</mi><mo>[</mo><mi>T</mi><mo>]</mo></mrow></math> plus the guaranteed first token (eq. 1.2), evaluated at each run's actual strand-length profile under the joint-MLE fit (§1). <code class="inline-code">nodes/decision</code> and <code class="inline-code">strands/decision</code> total across all <code class="inline-code">n_blocks</code> subcalls for the <code class="inline-code">n-choice</code> rows, since each real decision there spans several teacher calls (see <code class="inline-code">SeqNPTPChoiceKInference</code>). Model and observed track within ∼0.2–0.3 tokens almost everywhere; the <code class="inline-code">optimal*</code> sweep peaks at <code class="inline-code">optimal-50</code> both in the model and empirically.</p>
+
+  <h2><span class="num">6</span> Tree-based proposals: why non-monotone W(d) doesn't win here</h2>
+  <p>Everything above assumes strands never share tokens. Relaxing that: let two strands agree on their first <var>k</var> positions (a shared trunk) before diverging — verification only pays for the shared prefix once:</p>
+
+  <div class="eq-block">
+    <math display="block">
+      <mrow>
+        <mtext>cost</mtext><mo>(</mo><msub><mi>s</mi><mn>1</mn></msub><mo>,</mo><msub><mi>s</mi><mn>2</mn></msub><mo>)</mo><mo>=</mo>
+        <mo>|</mo><msub><mi>s</mi><mn>1</mn></msub><mo>|</mo><mo>+</mo><mo>|</mo><msub><mi>s</mi><mn>2</mn></msub><mo>|</mo><mo>−</mo><mi>k</mi>
+      </mrow>
+    </math>
+    <span class="eq-tag">6.1</span>
+  </div>
+
+  <p>This is strictly more general than §1–5: a flat forest can only ever produce a <em>nonincreasing</em> <math><mrow><mi>W</mi><mo>(</mo><mi>d</mi><mo>)</mo></mrow></math> (a strand alive at depth <var>d</var> was necessarily alive at every shallower depth too), while a branch point can inject width at one depth without having paid for it at any shallower one — <math><mrow><mi>W</mi><mo>(</mo><mi>d</mi><mo>)</mo></mrow></math> can rise and fall. Two corrections to the model are needed to price this correctly. First, during the shared prefix the pair behaves as <strong>one</strong> lineage, not two correlated ones — contributing <math><mrow><mi>S</mi><mo>[</mo><mn>1</mn><mo>,</mo><mi>d</mi><mo>]</mo></mrow></math> for <math><mrow><mi>d</mi><mo>=</mo><mn>1</mn><mo>..</mo><mi>k</mi></mrow></math>, not <math><mrow><mi>S</mi><mo>[</mo><mn>2</mn><mo>,</mo><mi>d</mi><mo>]</mo></mrow></math>. Second, the branch's children are gated by that lineage surviving <em>through</em> position <var>k</var> — <math><mrow><mi>S</mi><mo>[</mo><mn>1</mn><mo>,</mo><mi>k</mi><mo>+</mo><mn>1</mn><mo>]</mo></mrow></math> — and then evolve under a <strong>separate, no-exemption</strong> survival table: the generation-1 <math><msub><mi>π</mi><mn>0</mn></msub></math>-exemption (§1) is a one-time, real-depth-1 event, never re-earned by a branch spawned later, regardless of <var>k</var>:</p>
+
+  <div class="eq-block">
+    <math display="block">
+      <mrow>
+        <mi>E</mi><mo>[</mo><mi>T</mi><mo>]</mo><mo>=</mo>
+        <munderover><mo>∑</mo><mrow><mi>d</mi><mo>=</mo><mn>1</mn></mrow><mi>k</mi></munderover><mi>S</mi><mo>[</mo><mn>1</mn><mo>,</mo><mi>d</mi><mo>]</mo>
+        <mo>+</mo><mi>S</mi><mo>[</mo><mn>1</mn><mo>,</mo><mi>k</mi><mo>+</mo><mn>1</mn><mo>]</mo>
+        <munder><mo>∑</mo><mi>m</mi></munder><msub><mi>S</mi><mn>2</mn></msub><mo>[</mo><mi>W</mi><mo>(</mo><mi>k</mi><mo>+</mo><mi>m</mi><mo>)</mo><mo>,</mo><mi>m</mi><mo>]</mo>
+      </mrow>
+    </math>
+    <span class="eq-tag">6.2</span>
+  </div>
+
+  <p>Dropping achievability entirely — pretend <math><mrow><mi>W</mi><mo>(</mo><mi>d</mi><mo>)</mo></mrow></math> can be sized independently at each depth for free — turns the problem into a textbook separable-concave allocation, exactly solved by greedy water-filling (no DP needed, since <math><mrow><mi>S</mi><mo>[</mo><mi>w</mi><mo>,</mo><mi>d</mi><mo>]</mo></mrow></math> is concave increasing in <var>w</var> at every <var>d</var> we checked). That ceiling <em>is</em> genuinely non-monotone — at budget 30 it wants <math><mrow><mi>W</mi><mo>=</mo><mo>[</mo><mn>1</mn><mo>,</mo><mn>3</mn><mo>,</mo><mn>4</mn><mo>,</mo><mn>4</mn><mo>,</mo><mn>4</mn><mo>,</mo><mn>4</mn><mo>,</mo><mn>3</mn><mo>,</mo><mo>…</mo><mo>]</mo></mrow></math>, rising before it falls, because depth 1 has zero marginal value (<math><mrow><mi>S</mi><mo>[</mo><mi>w</mi><mo>,</mo><mn>1</mn><mo>]</mo><mo>=</mo><mn>1</mn></mrow></math> for any <math><mrow><mi>w</mi><mo>≥</mo><mn>1</mn></mrow></math>) while depths 2–6 still have plenty.</p>
+
+  <div class="callout">
+    <span class="label">The catch</span>
+    That ceiling is <em>unbuildable</em> as a real tree without paying for the correlation it ignored. Realizing <math><mrow><mi>W</mi><mo>(</mo><mn>1</mn><mo>)</mo><mo>=</mo><mn>1</mn></mrow></math> then jumping to <math><mrow><mi>W</mi><mo>(</mo><mn>2</mn><mo>)</mo><mo>=</mo><mn>3</mn></mrow></math> forces a 3-way branch off a single root — every downstream node now shares one point of failure. Simulated exactly, that tree scores <strong>3.335</strong>, worse than the plain flat optimum. The best <em>real</em> tree found by search (varying trunk depth, root width, and branch factor) reaches 3.4436 — within 0.36% of flat, but never past it.
+  </div>
+
+  <div class="table-wrap">
+  <table>
+    <caption>budget = 30, cap_t = 20</caption>
+    <thead><tr><th>structure</th><th class="num">E[T]</th></tr></thead>
+    <tbody>
+      <tr><td>unconstrained ceiling (unbuildable)</td><td class="num">3.4849</td></tr>
+      <tr><td>flat-optimal (achievable, §5)</td><td class="num">3.4560</td></tr>
+      <tr><td>best real sharing tree found</td><td class="num">3.4436</td></tr>
+      <tr><td>naive tree realizing the ceiling's own W(d)</td><td class="num">3.3351</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <p class="lede">Mechanistically: sharing trades an ongoing per-node saving for a one-time multiplicative gate, <math><mrow><mi>S</mi><mo>[</mo><mn>1</mn><mo>,</mo><mi>k</mi><mo>+</mo><mn>1</mn><mo>]</mo></mrow></math>, that every branch downstream is conditioned on. Under this checkpoint's fit (<math><mrow><mi>ρ</mi><mo>=</mo><mn>0.858</mn></mrow></math>) that gate consistently costs more than the freed nodes buy back — not because sharing is never worth it in principle, but because <math><mrow><mi>S</mi><mo>[</mo><mi>w</mi><mo>,</mo><mi>d</mi><mo>]</mo></mrow></math> stays meaningfully concave in <var>w</var> at every depth here, not just depth 1. It flips only for a shape this model doesn't have: a depth range where correlation is near-total (extra width is free to give up) followed by a depth range where it genuinely isn't (freed nodes land somewhere they still pay off) — e.g. <math><mrow><mi>ρ</mi><mo>→</mo><mn>1</mn></mrow></math> for the first 10 generations, back to 0.858 after. Nothing in this checkpoint's single, depth-uniform <math><mrow><mo>(</mo><msub><mi>π</mi><mn>0</mn></msub><mo>,</mo><mi>p</mi><mo>,</mo><mi>ρ</mi><mo>)</mo></mrow></math> produces that shape, which is why flat wins in practice.</p>
+
+  <hr class="div">
+  <footer>
+    <h3>Source</h3>
+    <ul>
+      <li><code>src/ptp/lit.py:855</code> — <code>proposals()</code>, the per-position token-budget allocator §2 feeds</li>
+      <li><code>scripts/inference.py:1813–2042</code> — <code>SeqPTPChoiceKInference</code>, strand construction and mode logic</li>
+      <li><code>scripts/inference.py:1890–1930</code> — <code>_branch_transition_matrix</code> and <code>_branch_survival_table</code></li>
+      <li><code>scripts/inference.py:1932–1999</code> — <code>_exact_optimal_lengths</code> and <code>_solve_width_profile</code>, the exact DP solver (§5)</li>
+      <li><code>scratch/correct.md</code> — full derivation, fitting procedures, and v1–v3 model history</li>
+    </ul>
+  </footer>
+</div>
+
+
+</body></html>
