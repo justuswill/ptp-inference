@@ -639,6 +639,94 @@ class SeqPTPThresholdInference(SeqInference):
         return {"threshold": self.threshold}
 
 
+class EntropyThresholdInference(SeqInference):
+    """
+    Entropy-adaptive teacher-probability acceptance ("typical acceptance").
+
+    A proposed token x is accepted iff the teacher assigns it
+
+        p(x) > min(epsilon, delta * exp(-H(p)))
+
+    where H(p) is the entropy of the teacher's (already temperature/top-p
+    adapted) distribution at that position.  The bound is therefore loose where
+    the teacher is uncertain -- many continuations are equally fine -- and tight
+    where it is confident that one token is right.  A fixed threshold cannot
+    express that; see `seq-thresh-p` for the fixed-threshold sibling.
+
+    Defaults follow Medusa's typical acceptance (epsilon=0.09, delta=0.3).
+    Progress is guaranteed by committing the teacher's argmax when nothing at the
+    first position clears the bound.
+
+    Note: implemented on the generate_seq driver rather than a fused single-call
+    path, because the fused `thresh-p` path is unimplemented.
+    """
+
+    name = "entr-p"
+
+    def __init__(self, lit_model, device, autocast_dtype, *, threshold: float = 0.09,
+                 delta: float = 0.3, raw: bool = False, **kwargs):
+        super().__init__(lit_model, device, autocast_dtype, raw=raw)
+        self.threshold = threshold
+        self.delta = delta
+
+    def _entropy_accept(self, student_tokens, tgt_logits):
+        """(accept_mask [n_prop], teacher argmax [1, n_prop]) under the adaptive bound."""
+        tgt_probs = torch.softmax(tgt_logits[:, :-1].float(), dim=-1)
+        p_proposed = tgt_probs.gather(2, student_tokens.unsqueeze(-1)).squeeze(-1)[0]
+        # Filtered tokens have probability exactly 0, and 0 * log(eps) == 0, so
+        # the truncated distribution contributes no NaN here.
+        entropy = -(tgt_probs * torch.log(tgt_probs + 1e-10)).sum(-1)[0]
+        bound = torch.minimum(
+            torch.full_like(entropy, self.threshold),
+            self.delta * torch.exp(-entropy),
+        )
+        return p_proposed > bound, tgt_probs.argmax(dim=-1)
+
+    def accepted_tokens(self, student_tokens, correct_tokens, student_logits, tgt_logits, z_rnd):
+        n_prop = student_tokens.shape[1]
+        accept_mask, max_tokens = self._entropy_accept(student_tokens, tgt_logits)
+        if not accept_mask[0]:
+            # Nothing acceptable at the first position: fall back to the teacher's
+            # argmax so the step still commits a token.
+            if student_tokens[:, 0] == max_tokens[:, 0]:
+                accept_mask[0] = True
+            else:
+                student_tokens[:, 0] = max_tokens[:, 0]
+        first_reject = n_prop if accept_mask.all() else int(accept_mask.float().argmin().item())
+        return student_tokens[:, :max(1, first_reject)]
+
+    def extra_metrics(self) -> dict:
+        return {"threshold": self.threshold, "delta": self.delta}
+
+
+class SeqPTPEntropyThresholdInference(EntropyThresholdInference):
+    """
+    Entropy-adaptive threshold OR exact PTP match, with a PTP correction token.
+
+    Same adaptive bound as `entr-p`, but a token also passes if it is the
+    teacher's argmax or if PTP would have accepted it (inverse-CDF match at the
+    shared auxiliary), and the first rejected position is filled from the
+    teacher's own CDF sample.  The entropy-adaptive analogue of
+    `seq-ptp-thresh-p`.
+    """
+
+    name = "seq-ptp-entr-p"
+
+    def accepted_tokens(self, student_tokens, correct_tokens, student_logits, tgt_logits, z_rnd):
+        n_prop = student_tokens.shape[1]
+        accept_mask, max_tokens = self._entropy_accept(student_tokens, tgt_logits)
+        accept_mask = (
+            accept_mask
+            | (student_tokens == max_tokens)[0]
+            | (student_tokens == correct_tokens[:, :-1])[0]
+        )
+        first_reject = n_prop if accept_mask.all() else int(accept_mask.float().argmin().item())
+        return torch.cat(
+            [student_tokens[:, :first_reject], correct_tokens[:, first_reject:first_reject + 1]],
+            dim=1,
+        )
+
+
 class ThresholdPTPInference:
     """
     PTP speculative decoding with threshold-based token acceptance.
@@ -3154,6 +3242,8 @@ ALGORITHMS: dict[str, type] = {
     "seq-conf-p": SeqConfPInference,
     "seq-ptp-conf-p": SeqPTPConfPInference,
     "thresh-p": ThresholdPTPInference,
+    "entr-p": EntropyThresholdInference,
+    "seq-ptp-entr-p": SeqPTPEntropyThresholdInference,
     "conf-p": ConfPInference,
     "seq-ratio": SeqRatioInference,
     "seq-ratio-k": SeqRatioInference,
@@ -3718,6 +3808,7 @@ def main(
     english_only: bool,
     greedy: bool = False,
     p: float = 0.7,
+    delta: float = 0.3,
     fast: bool = False,
     raw: bool = False,
     experiment: str = "qwen",
@@ -3872,6 +3963,8 @@ def main(
         algo = algo_cls(lit_model, device, autocast_dtype, threshold=p, fast=fast, raw=raw)
     elif algorithm in ("seq-ptp-thresh-p",):
         algo = algo_cls(lit_model, device, autocast_dtype, threshold=p, raw=raw)
+    elif algorithm in ("entr-p", "seq-ptp-entr-p"):
+        algo = algo_cls(lit_model, device, autocast_dtype, threshold=p, delta=delta, raw=raw)
     elif algorithm in ("seq-conf-p", "seq-ptp-conf-p"):
         algo = algo_cls(lit_model, device, autocast_dtype, threshold=p)
     elif algorithm in ("thresh-p", "conf-p"):
@@ -3980,6 +4073,10 @@ def main(
             algo_tag = f"seq-thresh-{p}{'_fast' if fast else ''}"
         elif algorithm == "seq-ptp-thresh-p":
             algo_tag = f"seq-ptp-thresh-{p}"
+        elif algorithm == "entr-p":
+            algo_tag = f"entr-{p}-d{delta}"
+        elif algorithm == "seq-ptp-entr-p":
+            algo_tag = f"seq-ptp-entr-{p}-d{delta}"
         elif algorithm == "seq-conf-p":
             algo_tag = f"seq-conf-{p}"
         elif algorithm == "seq-ptp-conf-p":
@@ -4000,6 +4097,7 @@ def main(
             algo_tag = algorithm
         _raw_algorithms = {
             "seq-thresh-p", "seq-ptp-thresh-p",
+            "entr-p", "seq-ptp-entr-p",
             "seq-ratio", "seq-ratio-k", "seq-ratio-p", "seq-ratio-k-p",
             "seq-ptp-ratio", "seq-ptp-ratio-k", "seq-ptp-ratio-p", "seq-ptp-ratio-k-p",
             "seq-inv-p",
@@ -4030,6 +4128,7 @@ def main(
         "only_first_turn": only_first_turn,
         "suppress_cot": suppress_cot,
         "k": k,
+        "delta": delta,
         "choice_mode": choice_mode,
         "greedy": greedy,
         "p": p,
@@ -4195,6 +4294,13 @@ def _parse_args():
         help="For --algorithm thresh-p: teacher probability threshold for acceptance (default: 0.7)",
     )
     parser.add_argument(
+        "--delta", type=float, default=0.3,
+        help="For --algorithm entr-p / seq-ptp-entr-p: coefficient of the "
+             "entropy-adaptive bound min(--p, delta * exp(-H)) (default: 0.3). "
+             "With --p as epsilon, the defaults (0.09, 0.3) reproduce Medusa's "
+             "typical acceptance.",
+    )
+    parser.add_argument(
         "--fast", action="store_true", default=False,
         help="Enable fast track in seq-thresh variants (skips teacher call)",
     )
@@ -4316,6 +4422,7 @@ def _parse_args():
         greedy=args.greedy,
         english_only=english_only,
         p=args.p,
+        delta=args.delta,
         fast=args.fast,
         raw=args.raw,
         experiment=args.experiment,

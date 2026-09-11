@@ -104,13 +104,18 @@ separately.
 We make three main contributions.
 
 \begin{itemize}
-  \item \textbf{The acceptance layer, made explicit.} We give a taxonomy of
-  seven families of acceptance rules for multi-token proposals and implement them
-  behind a single code path, so that two configurations differ only in the
-  acceptance predicate. Alongside it we give a measurement protocol that
-  separates throughput from faithfulness, including a test of whether the
+  \item \textbf{A design space that generalizes existing methods.} We separate
+  multi-token decoding into three independent axes --- verification, proposal
+  geometry, and parallelization --- and resolve the published methods along them
+  (Table~\ref{tab:baselines}). Most are special cases: a chain is a width profile
+  of one, a static draft tree is a profile fixed offline, and EAGLE-2's
+  context-aware tree is a greedy solution to our allocation problem under an
+  independence assumption that we make explicit and then remove. Eleven
+  verification rules sit behind a single code path, so two configurations differ
+  only in the acceptance predicate, and we pair them with a measurement protocol
+  that separates throughput from faithfulness --- including a test of whether the
   generated text is distributionally distinguishable from the base model's
-  (\S\ref{sec:acceptance}).
+  (\S\ref{sec:design}).
 
   \item \textbf{A generative model of $\ncorrect$ that makes proposal geometry
   solvable.} A zero-inflated Beta-Binomial branching process with shared
@@ -211,12 +216,35 @@ axis-aligned rectangles and therefore mismatches over a large area.
   \label{fig:partition}
 \end{figure}
 
-\section{The acceptance layer}
-\label{sec:acceptance}
+\section{The design space of multi-token decoding}
+\label{sec:design}
 
-\subsection{Exact acceptance is strict}
+A multi-token decoder is fixed by three choices: which proposals count as
+acceptable, what shape the proposals take, and what runs concurrently with
+verification. Existing methods each occupy one point in that space, usually
+without naming the space. Table~\ref{tab:baselines} places the Spec-Bench
+baselines; Tables~\ref{tab:verification}--\ref{tab:parallel} enumerate the
+options along each axis. Our own system is one further point, but the
+contribution we care about is the space itself: once the three axes are
+separated, most published designs are recognizable as special cases, and the
+choices nobody has tried become visible.
 
-The rule of \S\ref{sec:correct} is exact but unforgiving: a proposal is rejected
+\begin{table}[t]
+  \centering
+  \caption{The Spec-Bench baselines, resolved along the three axes. ``guarantee''
+  is what the method promises about its output: \emph{exact} preserves the base
+  model's distribution, \emph{greedy} reproduces greedy decoding only,
+  \emph{biased} gives up both by design. ``overlap'' is what runs concurrently
+  with verification. $p$ is the base model's distribution, $q$ / $\hat p$ the
+  proposal model's, $c_j$ its confidence at node $j$, $H$ the entropy.}
+  \label{tab:baselines}
+  \input{tab/baselines}
+\end{table}
+
+\subsection{Verification: what counts as acceptable}
+\label{sec:verification}
+
+The exact rule of \S\ref{sec:correct} is unforgiving: a proposal is rejected
 whenever the drawn auxiliary falls in the sliver where the two partitions
 disagree, even if the proposed token is one the base model would have been
 perfectly happy to emit at a slightly different $\aux$. On the example of
@@ -246,52 +274,110 @@ proposal model and the same proposals.
   \label{fig:accept}
 \end{figure}
 
-\subsection{A taxonomy of rules}
+Table~\ref{tab:verification} lists the rules. Write $q$ for the proposal model's
+distribution at a position, $p$ for the base model's, $x$ for the proposed token,
+$\aux$ for the shared auxiliary, and $I_p(x)$ for the inverse-CDF interval $p$
+assigns to $x$. Two properties organize the column space. \emph{Does the rule
+call the base model?} If not (student confidence, unconditional acceptance,
+self-verification) the rule is nearly free but has no access to the distribution
+we are trying to stay faithful to. \emph{Does the rule preserve that
+distribution?} Only the exact and ratio rules do; the rest are deliberate
+relaxations, and the empirical question is what each one costs. We implement all
+eleven behind a single code path, so two runs differ only in the predicate.
 
-Write $q$ for the proposal model's distribution at a position, $p$ for the base
-model's, $x$ for the proposed token, and $\aux$ for the shared auxiliary. Every
-rule we study decides acceptance from these objects; the families differ in what
-they look at. All are implemented in a single code path so that the only
-difference between two runs is the predicate.
+\begin{table}[t]
+  \centering
+  \caption{Verification rules. ``base call'' is whether the rule consults the
+  model being accelerated; ``output'' is the resulting guarantee. Rules with no
+  entry in ``used by'' are, to our knowledge, unexplored in the multi-token
+  setting; we evaluate all eleven in \S\ref{sec:experiments}.}
+  \label{tab:verification}
+  \input{tab/aspect_verification}
+\end{table}
 
-\textbf{Exact.} Accept iff $x = \Pick(\aux, p)$. Distribution-preserving by
-construction (\S\ref{sec:correct}).
+\subsection{Proposal geometry: how many chances, and how long}
+\label{sec:geometry}
 
-\textbf{Relaxed deterministic.} Accept iff $x$ lies in a high-probability set of
-$p$: nucleus membership, $\sum_{y : p(y) > p(x)} p(y) < \theta$
-\citep{holtzman2020nucleus}, or top-$k$ rank. As $\theta \to 0$ this contracts to
-argmax agreement, not to the exact rule.
+Given a budget of $\budget$ proposal nodes per call, the geometry question is how
+to spend it: one long continuation, many short ones, or a tree. Every choice is
+summarized by a \emph{width profile} $\width(d)$, the number of proposal strands
+still alive at depth $d$ (\S\ref{sec:knapsack} makes this precise), and
+Table~\ref{tab:geometry} classifies the options by how that profile is picked.
+The column that matters is the last but one: whether the allocation accounts for
+\emph{correlation} between strands. Failures are not independent --- some
+positions are hard for every strand at once --- and \S\ref{sec:model} shows this
+is what makes width saturate.
 
-\textbf{Thresholds.} Accept iff $p(x) \geq \theta$ (base-model probability), or
-iff $q(x) \geq \theta$ (the proposal model's own confidence). The latter needs no
-base-model call at all, which makes it the cheapest rule available and, as we
-show, not a good one.
+\begin{table}[t]
+  \centering
+  \caption{Proposal geometries. ``correlated'' is whether the allocation rule
+  models dependence between sibling strands rather than treating per-node
+  acceptance as independent. $\Sfun[w,d]$ is the survival function of
+  \S\ref{sec:model}.}
+  \label{tab:geometry}
+  \input{tab/aspect_geometry}
+\end{table}
 
-\textbf{Stochastic ratio.} The speculative-sampling
-rule~\citep{leviathan2023speculative,chen2023accelerating}: accept with
-probability $\min(1, (\kappa \, p(x) + \varpi)/q(x))$ and, on rejection, resample
-from the residual $\propto \max(0, p - q)$. At $\kappa = 1, \varpi = 0$ this is
-distribution-preserving in theory.
+\subsection{Parallelization: what overlaps verification}
+\label{sec:parallel}
 
-\textbf{Inverse-CDF distance.} Accept iff the drawn $\aux$ is within $\theta$ of
-the interval $[\aux_{\mathrm{lo}}, \aux_{\mathrm{hi}})$ that $p$ assigns to $x$,
-\ie $\max(\aux_{\mathrm{lo}} - \aux,\, \aux - \aux_{\mathrm{hi}}) \leq \theta$.
-This interpolates continuously from the exact rule at $\theta = 0$, and is the
-natural relaxation in the auxiliary-square picture of
-Figure~\ref{fig:accept}: it dilates the accepted cell rather than replacing the
-criterion.
+Proposal and verification are naturally serial --- the next proposal depends on
+how much of the last was accepted. Table~\ref{tab:parallel} lists the ways to
+break that dependency, all of which spend compute to speculate on the
+verification outcome. This axis is nearly empty in the literature: of the nine
+baselines, only Lookahead overlaps anything, by fusing guessing into the same
+forward pass.
 
-\textbf{Unconditional.} Accept the first $k$ proposed tokens regardless. A
-throughput ceiling and a quality floor.
+\begin{table}[t]
+  \centering
+  \caption{Parallelization schemes. ``extra compute'' is the cost multiplier
+  relative to serial drafting; $\nprop$ is the number of proposed tokens and
+  $\budget$ the node budget.}
+  \label{tab:parallel}
+  \input{tab/aspect_parallel}
+\end{table}
 
-\textbf{Self-verification.} Replace the base model by the proposal model's own
-autoregressive prediction, so no second set of weights is consulted. This removes
-the base-model call from the critical path entirely; the cost is that the rule no
-longer references the distribution we are trying to stay faithful to.
+\subsection{What the framework generalizes}
+\label{sec:generalize}
 
-Only the exact rule and (in theory) the ratio rule preserve the base model's
-output distribution. Every other rule biases the output, and the empirical
-question is by how much, in exchange for what.
+Read across the tables, the baselines are special cases.
+
+\textbf{Geometry.} A chain is $\width(d) \equiv 1$. A static tree is a width
+profile fixed offline --- Medusa picks it by greedily adding the node with the
+highest calibration accuracy, Recycling hand-designs an imbalanced $81$-node,
+$6$-layer shape. EAGLE-2's context-aware tree is an \emph{online} solution to
+exactly the allocation problem of \S\ref{sec:knapsack}: it scores a node by
+$V_i = \prod_{t_j \in \mathrm{Path}} p_j \approx \prod_j c_j$ and greedily
+expands the best. That product is an independence assumption, and Medusa's
+per-head calibration is the same assumption in offline form. Our model replaces
+it with a correlation parameter $\rhoc$, recovers the independent case as
+$\rhoc \to 0$, and solves the allocation exactly rather than greedily.
+
+\textbf{Verification.} The exact and ratio rules are the top two rows of
+Table~\ref{tab:verification}; PLD, Lookahead, Recycling and SAMD all use argmax
+match. Medusa and Hydra use the entropy-adaptive threshold
+$p(x) > \min(\epsilon, \delta e^{-H(p)})$, which is a genuinely different object
+from a fixed threshold: it accepts liberally where the base model is uncertain
+and strictly where it is confident. Our exact rule has no baseline analogue,
+because it needs the auxiliary-variable coupling of \S\ref{sec:background};
+speculative sampling reaches the same guarantee by a different mechanism.
+
+\textbf{Parallelization.} Lookahead is the fused-pass row; Partial Quadratic
+Decoding is the budgeted-branch row. \S\ref{sec:pqd} shows that the branch
+weights and branch values PQD needs are both readable off the same survival
+function that solves the geometry problem, which removes the two separately
+calibrated estimates the original formulation requires.
+
+\paragraph{Where the framework does not yet reach.}
+Two gaps are worth stating plainly. First, our width profiles are
+\emph{nonincreasing}: strands are disjoint, so a node's cost is paid at every
+depth it spans. Every tree baseline instead shares prefixes, which lets
+$\width(d)$ rise before it falls and changes the cost accounting to
+$|s_1| + |s_2| - k$ for a shared trunk of length $k$; we return to this in
+\S\ref{sec:knapsack}. Second, our budget counts nodes uniformly, whereas
+retrieval-based proposals (PLD, SAMD, Recycling) cost a string match rather than
+a forward pass. Both are natural extensions of the same knapsack --- a relaxed
+monotonicity constraint and a per-node cost --- but we do not evaluate them here.
 
 \section{A model of the number of correct tokens}
 \label{sec:model}
@@ -738,20 +824,26 @@ accelerate a \emph{specific} base model.
 
 \section{Related work}
 
-Speculative decoding proposes tokens with a cheap drafter and verifies them
-against the target model with a distribution-preserving acceptance
-rule~\citep{leviathan2023speculative,chen2023accelerating}; our exact rule is its
-analogue under shared auxiliaries. A large family of methods makes the drafter
-cheaper or better: extra decoding heads~\citep{stern2018blockwise,cai2024medusa},
-sequentially dependent heads~\citep{ankner2024hydra}, feature-space
-drafting with dynamic draft trees~\citep{li2024eagle,li2024eagle2},
-Jacobi-style parallel decoding~\citep{fu2024lookahead}, and retrieval from the
+Table~\ref{tab:baselines} already resolves the methods we compare against along
+our three axes, so we note here only what they have in common. Speculative
+decoding established the proposal-and-verify
+template~\citep{leviathan2023speculative,chen2023accelerating}, and the work
+since has almost entirely gone into the \emph{proposal}: extra decoding
+heads~\citep{stern2018blockwise,cai2024medusa}, sequentially dependent
+heads~\citep{ankner2024hydra}, feature-space drafting with static and then
+dynamic draft trees~\citep{li2024eagle,li2024eagle2}, Jacobi-style parallel
+decoding~\citep{fu2024lookahead}, and retrieval from the
 prompt~\citep{saxena2023pld}. Multi-token prediction has also been used as a
-training objective in its own right~\citep{gloeckle2024multitoken}. All of these
-inherit the acceptance rule rather than study it, and are benchmarked with
-accepted-tokens-per-call and speedup~\citep{xia2024specbench} but not with a test
-of distributional faithfulness. PTP~\citep{draxler2025ptp} supplies the proposal
-mechanism we build on, along with Partial Quadratic Decoding; the connection
+training objective in its own right~\citep{gloeckle2024multitoken}. Verification
+is correspondingly under-explored: the acceptance rule is inherited, not chosen,
+with Medusa's entropy-adaptive threshold the notable exception. And the standard
+benchmark protocol reports accepted-tokens-per-call and
+speedup~\citep{xia2024specbench} without any test of distributional
+faithfulness, which \S\ref{sec:exp:rules} shows is where the rules actually
+differ. Allocation under a draft budget is treated heuristically throughout ---
+EAGLE-2's greedy expansion is the most explicit version, and it assumes
+independence between sibling nodes. PTP~\citep{draxler2025ptp} supplies the
+proposal mechanism and Partial Quadratic Decoding we build on; the connection
 between auxiliary variables and inverse autoregressive
 flows~\citep{kingma2016iaf} is noted there. Our branching model is a
 zero-inflated, shared-frailty Galton--Watson process~\citep{athreya1972branching}.

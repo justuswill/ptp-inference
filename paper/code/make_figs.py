@@ -36,6 +36,9 @@ PNG_DIR: Path | None = None
 
 # dataviz reference palette, categorical slots 1-8, light mode, fixed order.
 S1, S2, S3, S4 = "#2a78d6", "#eb6834", "#1baf7a", "#eda100"
+# Slot 5 is skipped: magenta sits below 3:1 on the light surface, and the
+# sweep figure has no direct labels to fall back on (dataviz relief rule).
+S6 = "#008300"  # categorical slot 6
 INK, INK2, INK3 = "#0b0b0b", "#52514e", "#8a8984"
 BAR = "#cdd5de"  # recessive fill for observed histograms
 # Sequential blue, ordinal use: no lighter than step 250 on a light surface.
@@ -303,6 +306,8 @@ FAMILY = {
     "first_k": ("accept-$k$", "v", S2),
     "conf-p": ("student confidence", "^", S2),
     "thresh-p": ("teacher threshold", "<", S2),
+    "entr-p": ("entropy-adaptive", ">", S2),
+    "seq-ptp-entr-p": ("entropy-adaptive", ">", S2),
     "ratio": ("ratio", "D", S3),
     "ratio-k": ("ratio", "D", S3),
     "ratio-p": ("ratio", "D", S3),
@@ -317,7 +322,8 @@ FAMILY = {
 }
 
 LEGEND_ORDER = ["autoregressive", "exact", "nucleus", "nucleus + ensemble", "ratio",
-                "teacher threshold", "student confidence", "accept-$k$", "self-verified"]
+                "teacher threshold", "entropy-adaptive", "student confidence",
+                "accept-$k$", "self-verified"]
 
 
 def rows():
@@ -404,6 +410,8 @@ def fig_sweeps():
         ("teacher probability", "thresh-p", S2, "<"),
         ("student confidence", "conf-p", S3, "^"),
         ("self + nucleus", "seq-ptp-top-p-self", S4, "X"),
+        # Medusa's rule: x is eps here, so it shares the threshold axis.
+        ("entropy-adaptive", "seq-ptp-entr-p", S6, ">"),
     ]
     fig, axes = plt.subplots(1, 3, figsize=(TEXTWIDTH, 1.95))
     for label, algo, color, marker in series:
