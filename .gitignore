@@ -22,3 +22,7 @@ checkpoints/.cache/
 
 .idea/
 plot.png
+
+# Symlink farms into cluster checkpoints -- Overleaf rejects symlinks in the repo
+scratch/eval_all/
+scratch/eval_missing/
