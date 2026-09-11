@@ -59,8 +59,9 @@ multi-token inference framework, but the acceptance rules and the evaluation
 protocol are framework-agnostic and apply to any model producing multiple tokens
 per call. We report accepted-tokens-per-call, wall-clock speedup, and downstream
 task quality across $62$ decoding configurations on Spec-Bench, and find that the
-three measures order the rules differently: the rule that commits the most tokens
-per call is frequently not the fastest, and is rarely the most faithful.
+three measures induce three different orderings: committing more tokens per call
+is neither sufficient for lower latency nor compatible with staying faithful to
+the reference.
 \end{abstract}
 
 \section{Introduction}
@@ -102,17 +103,38 @@ show that the branch weights and the value of a branch can be read off the same
 calibrated model that solves the geometry problem, rather than estimated
 separately.
 
-Our contributions are: (i) a taxonomy and unified implementation of $12$ families
-of acceptance rules for multi-token proposals, with a measurement protocol that
-separates throughput from faithfulness (\S\ref{sec:acceptance}); (ii) a
-zero-inflated Beta-Binomial branching model of $\ncorrect$ given proposal width
-and context, which predicts per-call accepted-token histograms across three
-orders of magnitude of width with $R^2 \geq 0.976$ (\S\ref{sec:model}); (iii) an
-exact dynamic program for the resulting strand-length knapsack, and its
-combination with PQD's budget allocation (\S\ref{sec:knapsack},
-\S\ref{sec:pqd}); and (iv) an empirical study of $62$ decoding configurations
-showing that accepted-tokens-per-call, wall-clock speedup, and faithfulness to
-the base model order the rules differently (\S\ref{sec:experiments}).
+We make three main contributions.
+
+\begin{itemize}
+  \item \textbf{The acceptance layer, made explicit.} We give a taxonomy of
+  seven families of acceptance rules for multi-token proposals and implement them
+  behind a single code path, so that two configurations differ only in the
+  acceptance predicate. Alongside it we give a measurement protocol that
+  separates throughput from faithfulness, including a test of whether the
+  generated text is distributionally distinguishable from the base model's
+  (\S\ref{sec:acceptance}).
+
+  \item \textbf{A generative model of $\ncorrect$ that makes proposal geometry
+  solvable.} A zero-inflated Beta-Binomial branching process with shared
+  per-generation frailty predicts per-call accepted-token histograms across three
+  orders of magnitude of proposal width from three parameters
+  ($R^2 \geq 0.976$). Its survival function makes expected yield separable across
+  depth, which turns strand-length selection into a knapsack we solve exactly by
+  dynamic programming --- and the same object supplies the branch weights and
+  branch values that Partial Quadratic Decoding needs, replacing two separately
+  calibrated estimates with one (\S\ref{sec:model}--\S\ref{sec:pqd}).
+
+  \item \textbf{Evidence that the standard metric is the wrong one alone.}
+  Across $62$ decoding configurations on Spec-Bench, accepted-tokens-per-call,
+  wall-clock speedup, and faithfulness to the base model induce three different
+  orderings. The configurations at the top of the tokens-per-call ranking get
+  there by accepting almost everything, roughly halving the base model's mean
+  token probability; among those that stay close to the base model, more tokens
+  per call often means \emph{slower} generation --- wide ensembles reach $4.6$
+  tokens per call at $0.31\times$ autoregressive speed. Only the exact rules are
+  distributionally indistinguishable from the base model
+  (\S\ref{sec:experiments}).
+\end{itemize}
 
 \section{Background: multi-token proposals and their verification}
 \label{sec:background}
