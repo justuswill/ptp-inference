@@ -264,7 +264,7 @@ def packed_collate_fn(batch: list[dict]) -> dict:
     All per-item tensors are already padded to (D,) and (N,) in __getitem__,
     so this is purely torch.stack.
     """
-    return {
+    collated = {
         "input_ids":         torch.stack([x["input_ids"]    for x in batch]),
         "input_mask":        torch.stack([x["input_mask"]   for x in batch]),
         "doc_ids":           torch.stack([x["doc_ids"]      for x in batch]),
@@ -274,3 +274,11 @@ def packed_collate_fn(batch: list[dict]) -> dict:
         "completion_doc_ids":      torch.stack([x["completion_doc_ids"] for x in batch]),
         "completion_length": batch[0]["completion_length"],
     }
+    # Pass through the extra per-token tensors PackingDataset carried over from the base
+    # dataset (bin_edges_left / bin_edges_right). Without this they are silently dropped,
+    # and ParallelSamplingLightningModule.forward falls back to recomputing them with
+    # predict_bin_edges -- a grad-retaining AR pass that costs ~17GB of activations.
+    for key, value in batch[0].items():
+        if key not in collated and isinstance(value, torch.Tensor):
+            collated[key] = torch.stack([x[key] for x in batch])
+    return collated

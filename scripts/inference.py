@@ -89,6 +89,7 @@ class SeqInference:
     student_forward = None    # override to replace the student inference_forward call
     teacher_forward = None    # override to replace the teacher inference_forward call
     correct_first_token = True  # override (e.g. False) to change generate_seq's first-token handling
+    shared_kv_cache = False   # override (e.g. True) to reuse one KV cache for student+teacher
 
     def __init__(self, lit_model, device, autocast_dtype, *, raw: bool = False, **kwargs):
         self.lit_model = lit_model
@@ -115,6 +116,7 @@ class SeqInference:
                 student_forward=self.student_forward,
                 teacher_forward=self.teacher_forward,
                 correct_first_token=self.correct_first_token,
+                shared_kv_cache=self.shared_kv_cache,
             )
         elapsed_ms = (time.perf_counter() - t0) * 1000.0
         n_gen = completion.shape[1] - prompt_ids.shape[1]
@@ -199,6 +201,7 @@ class SeqTreeInference(SeqInference):
                 accepted_tokens=self.accepted_tokens,
                 student_forward=self.student_forward,
                 teacher_forward=self.teacher_forward,
+                shared_kv_cache=self.shared_kv_cache,
             )
         elapsed_ms = (time.perf_counter() - t0) * 1000.0
         n_gen = completion.shape[1] - prompt_ids.shape[1]
@@ -227,14 +230,132 @@ class PTPInference:
 
     name = "ptp"
 
-    def __init__(self, lit_model, device, autocast_dtype, *, max_tokens_per_proposal: int, total_token_budget: int):
+    # p for the "geom" partial_mode, fitted over all questions; see scratch/correct.md.
+    GEOM_P = 0.698
+
+    # Population Beta(a,b) prior over p for the "beta" partial_mode: the hierarchical
+    # Beta-Geometric fit jointly over all questions for the K=1 (1 + Geometric(p)) model.
+    # See scratch/joint_per_question_results.json ("seqptp" entry: a, b).
+    BETA_PRIOR_A = 12.575047374037903
+    BETA_PRIOR_B = 6.030620173416624
+
+    def __init__(self, lit_model, device, autocast_dtype, *, max_tokens_per_proposal: int, total_token_budget: int,
+                 partial_mode: str = "count", phead_checkpoint: str | None = None,
+                 chead_checkpoint: str | None = None):
         self.lit_model = lit_model
         self.device = device
         self.autocast_dtype = autocast_dtype
         self.max_tokens_per_proposal = max_tokens_per_proposal
         self.total_token_budget = total_token_budget
+        self.partial_mode = partial_mode
+        self._example_idx = -1  # incremented at the start of each generate() call
+        if partial_mode == "phead":
+            assert phead_checkpoint is not None, "--phead-checkpoint is required for --partial-mode phead"
+            from ptp.p_head import PHead
+            sidecar = torch.load(phead_checkpoint, map_location="cpu", weights_only=False)
+            phead = PHead(lit_model.model.model.config.hidden_size)
+            phead.load_state_dict(sidecar["p_head_state_dict"])
+            phead = phead.to(device).eval()
+            lit_model.model.output_hidden_states = True
+
+            def phead_H_fn(metrics):
+                with torch.no_grad():
+                    p_pred = phead(lit_model._last_context_hidden.float()).item()
+                return self.compute_H("phead", metrics={"p_pred": p_pred})
+
+            lit_model.H_fn = phead_H_fn
+        elif partial_mode == "chead":
+            assert chead_checkpoint is not None, "--chead-checkpoint is required for --partial-mode chead"
+            from ptp.p_head import CHead
+            sidecar = torch.load(chead_checkpoint, map_location="cpu", weights_only=False)
+            chead = CHead(lit_model.model.model.config.hidden_size)
+            chead.load_state_dict(sidecar["c_head_state_dict"])
+            chead = chead.to(device).eval()
+            lit_model.model.output_hidden_states = True
+
+            def chead_H_fn(metrics):
+                with torch.no_grad():
+                    logits = chead(lit_model._last_context_hidden.float())
+                    probs = torch.softmax(logits, dim=-1).squeeze(0).cpu()
+                return self.compute_H("chead", metrics={"probs": probs})
+
+            lit_model.H_fn = chead_H_fn
+        elif partial_mode == "beta_oracle":
+            # Precomputed per-question free MLE p_hat_i from the earlier per-question
+            # hierarchical analysis (K=1/seqptp), indexed by example order (matches how
+            # iter_spec_bench_pairs is iterated, same as when that data was collected).
+            oracle_path = Path(__file__).resolve().parent.parent / "scratch" / "joint_per_question_results.json"
+            with open(oracle_path) as f:
+                self._oracle_p_hat = json.load(f)["seqptp"]["p_hat_i"]
+
+            def oracle_H_fn(metrics):
+                p = self._oracle_p_hat[self._example_idx % len(self._oracle_p_hat)]
+                return self.compute_H("beta_oracle", metrics={"p_pred": p})
+
+            lit_model.H_fn = oracle_H_fn
+        else:
+            lit_model.H_fn = lambda metrics: self.compute_H(partial_mode, lit_model.hist_base, metrics)
+
+    @classmethod
+    def compute_H(cls, partial_mode: str, hist_base: torch.Tensor | None = None,
+                   metrics: dict | None = None) -> torch.Tensor:
+        """
+        Reward matrix H: estimated # correct tokens in the next proposal step
+        given k proposed tokens (k = 0..20), used by ParallelSamplingLightningModule.proposals().
+          - "count": H(k) = k.
+          - "hist":  H(k) = E[min(G, k)] under the empirical histogram hist_base.
+          - "geom":  H(k) = E[min(G, k)] under the shifted-geometric model
+                     G = 1 + Geometric(GEOM_P), clamped to the same 0..20 support.
+          - "beta":  Like "geom", but p is the posterior mean of a Beta(BETA_PRIOR_A,
+                     BETA_PRIOR_B) prior updated with the #correct-per-call samples seen
+                     so far this generation (metrics['correct']): each call contributes
+                     one Beta-Geometric trial (correct_i successes, 1 failure).
+          - "phead":  p is predicted directly from context by a fine-tuned P-head
+                      (see src/ptp/p_head.py); metrics['p_pred'] must be supplied by
+                      the caller (PTPInference.__init__'s phead_H_fn).
+          - "chead":  Like "hist", but the 21-class categorical distribution over #correct
+                      is predicted directly from context by a fine-tuned C-head (non-parametric,
+                      no Geometric shape assumption; see src/ptp/p_head.py); metrics['probs']
+                      must be supplied by the caller (PTPInference.__init__'s chead_H_fn).
+          - "beta_oracle": p is the precomputed per-question free MLE from the earlier
+                     per-question hierarchical analysis (scratch/joint_per_question_results.json,
+                     "seqptp".p_hat_i), indexed by example order — an oracle upper bound for
+                     "beta"'s online per-question estimate, since it uses the whole question's
+                     data instead of updating from partial observations.
+        """
+        arange_21 = torch.arange(21)
+
+        def geom_H(p: float) -> torch.Tensor:
+            """H(k) = E[min(G, k)] for G = 1 + Geometric(p), clamped to the 0..20 support."""
+            pmf = torch.zeros(21, dtype=torch.float64)
+            g = arange_21[1:20].double()
+            pmf[1:20] = p * (1 - p) ** (g - 1)
+            pmf[20] = 1 - pmf[:20].sum()
+            return torch.cumsum(pmf * arange_21, dim=-1)
+
+        if partial_mode == "count":
+            return arange_21.double()
+        elif partial_mode == "hist":
+            assert hist_base is not None, "hist_base must be provided for partial_mode='hist'"
+            return torch.cumsum(hist_base * arange_21, dim=-1)
+        elif partial_mode == "geom":
+            return geom_H(cls.GEOM_P)
+        elif partial_mode == "beta":
+            correct = metrics["correct"] if metrics is not None else []
+            a_post = cls.BETA_PRIOR_A + sum(correct)
+            b_post = cls.BETA_PRIOR_B + len(correct)
+            return geom_H(a_post / (a_post + b_post))
+        elif partial_mode == "phead":
+            return geom_H(metrics["p_pred"])
+        elif partial_mode == "chead":
+            return torch.cumsum(metrics["probs"] * arange_21, dim=-1)
+        elif partial_mode == "beta_oracle":
+            return geom_H(metrics["p_pred"])
+        else:
+            raise ValueError(f"Unknown partial_mode: {partial_mode!r}")
 
     def generate(self, prompt_ids: torch.Tensor, max_new_tokens: int) -> tuple[torch.Tensor, dict]:
+        self._example_idx += 1
         autocast_ctx = (
             torch.autocast(self.device.type, dtype=self.autocast_dtype)
             if self.autocast_dtype is not None
@@ -811,6 +932,7 @@ class RatioInference:
         self.p_add = p_add
         lit_model.tokens_per_student_call = max_tokens_per_proposal
         lit_model.total_token_budget = total_token_budget
+        lit_model.H_fn = lambda metrics: PTPInference.compute_H("hist", lit_model.hist_base, metrics)
 
     def generate(self, prompt_ids: torch.Tensor, max_new_tokens: int) -> tuple[torch.Tensor, dict]:
         import numpy as np
@@ -994,7 +1116,7 @@ class RatioInference:
                         ], dim=1)
                         tokens_to_verify -= 1
                         tokens_to_fill = tokens_to_verify
-                        n_props = lm.proposals(n_verify=0, num_tokens=num_proposed_tokens, metrics=metrics)
+                        n_props = lm.proposals(lm.H_fn(metrics), n_verify=0, num_tokens=num_proposed_tokens, metrics=metrics)
                     else:
                         prompt_ids = torch.cat([
                             prompt_ids[:, :prompt_ids.shape[1] - (n_verify - num_correct)],
@@ -1002,7 +1124,7 @@ class RatioInference:
                         ], dim=1)
                         tokens_to_fill = tokens_to_verify - ths_student_predicted.shape[1]
                         tokens_to_verify -= 1
-                        n_props = lm.proposals(student_p=ths_student_p[:, 1:], num_tokens=num_proposed_tokens, metrics=metrics)
+                        n_props = lm.proposals(lm.H_fn(metrics), student_p=ths_student_p[:, 1:], num_tokens=num_proposed_tokens, metrics=metrics)
                     metrics['correct'] += [num_new]
                     if eos in correct_tokens[:, :num_correct + 1]:
                         break
@@ -1684,10 +1806,34 @@ class SeqPTPSelfInference(SeqInference):
     """
 
     name = "seq-ptp-self"
-    correct_first_token = False
+
+    def __init__(self, lit_model, device, autocast_dtype, *, ar_mode: str = "aux", **kwargs):
+        super().__init__(lit_model, device, autocast_dtype, **kwargs)
+        assert ar_mode in ("aux", "tok"), f"ar_mode must be 'aux' or 'tok', got {ar_mode!r}"
+        self.ar_mode = ar_mode
+        self.correct_first_token = (ar_mode == "tok")
+        # Under tok mode both student and teacher compute the real-token prefix via
+        # the exact same merged-LoRA forward (no z-conditioning on the retained
+        # content), so the two caches are numerically redundant -- share one cache
+        # instead of maintaining two identical copies. Not valid for aux mode: the
+        # student's gated cache and the teacher's z-probe cache are genuinely
+        # different computations there.
+        self.shared_kv_cache = (ar_mode == "tok")
 
     def student_forward(self, input_ids, auxiliaries, past_key_values):
-        self._z_student = auxiliaries[0]  # [n_prop], reused by teacher_forward below
+        # auxiliaries is None for the one-off initial KV-cache prefill (generate_seq
+        # routes that through this callback too, so both submodes see a consistent
+        # student-side cache); real proposal calls always pass it.
+        if auxiliaries is not None:
+            self._z_student = auxiliaries[0]  # [n_prop], reused by teacher_forward below
+        if self.ar_mode == "tok":
+            with _full_lora_mode(self.lit_model):
+                return self.lit_model.model.inference_forward(
+                    input_ids=input_ids,
+                    auxiliaries=auxiliaries,
+                    past_key_values=past_key_values,
+                    use_cache=True,
+                )
         return self.lit_model.model.inference_forward(
             input_ids=input_ids,
             auxiliaries=auxiliaries,
@@ -1696,6 +1842,18 @@ class SeqPTPSelfInference(SeqInference):
         )
 
     def teacher_forward(self, input_ids, past_key_values, use_cache=True):
+        if self.ar_mode == "tok":
+            # Plain per-position causal verification (one row per real token, like
+            # plain seq-ptp), but with LoRA merged in everywhere rather than gated
+            # to a window — same trick FullLoRAPTPInference uses for ptp_self. Covers
+            # the prefill too (past_key_values is None) so the teacher's own KV
+            # cache is merged-LoRA throughout, not a base-only prompt mixed with
+            # merged-LoRA verify tokens.
+            with _full_lora_mode(self.lit_model):
+                return self.lit_model.model.inference_forward(
+                    input_ids=input_ids, past_key_values=past_key_values, use_cache=use_cache,
+                )
+
         if past_key_values is None:
             # Initial full-prompt prefill (kv_teacher hasn't been created yet):
             # no verification happening yet, so skip the aux-probe machinery
@@ -1749,19 +1907,72 @@ class SeqPTPSelfInference(SeqInference):
         return outputs
 
     def accepted_tokens(self, student_tokens, correct_tokens, student_logits, tgt_logits, z_rnd):
-        # generate_seq's default correct_tokens comes from inverse-CDF sampling
-        # tgt_logits with z_rnd, which disagrees with the student's own argmax
-        # even when tgt_logits is identical to student_logits (same context,
-        # same shared z) — argmax and "sample at this z" are different
-        # operations on the same distribution. adapt_logits (temperature/
-        # top-k/top-p) never removes the argmax token, so recomputing
-        # correct_tokens via argmax here guarantees agreement whenever the
-        # underlying logits truly match.
         n_prop = student_tokens.shape[1]
-        correct_tokens = tgt_logits.argmax(dim=-1)
+        if self.ar_mode == "aux":
+            # generate_seq's default correct_tokens comes from inverse-CDF sampling
+            # tgt_logits with z_rnd, which disagrees with the student's own argmax
+            # even when tgt_logits is identical to student_logits (same context,
+            # same shared z) — argmax and "sample at this z" are different
+            # operations on the same distribution. adapt_logits (temperature/
+            # top-k/top-p) never removes the argmax token, so recomputing
+            # correct_tokens via argmax here guarantees agreement whenever the
+            # underlying logits truly match. Only applies to aux mode: there,
+            # tgt_logits is itself z-conditioned via the same z the student used.
+            correct_tokens = tgt_logits.argmax(dim=-1)
+        # else (tok): tgt_logits comes from a plain, unconditioned causal forward —
+        # no z-conditioning at all, exactly like plain seq-ptp's real AR teacher —
+        # so there's no same-z mismatch to work around here. Keep generate_seq's
+        # already-computed stochastic correct_tokens (sample_from_logits at z_rnd)
+        # instead of forcing argmax: forcing argmax was the actual cause of tok
+        # mode's rare repetition-collapse failures — once the self-adapted
+        # distribution's argmax favors "repeat the last token/pattern," greedy
+        # correction has no stochastic escape and keeps reinforcing the loop.
         matches = student_tokens == correct_tokens[:, :-1]
         first_reject = n_prop if matches.all() else int(matches.float().argmin().item())
         return correct_tokens[:, :first_reject + 1]
+
+
+class SeqPTPTopPSelfInference(SeqPTPSelfInference):
+    """
+    SeqPTPSelfInference's self-speculative teacher (aux-probe or tok, per ar_mode)
+    combined with SeqPTPTopPInference's nucleus acceptance: a proposed token is
+    accepted if it falls inside the (self) teacher's top-p nucleus, not just when
+    it exactly matches the teacher's own argmax pick as plain seq-ptp-self
+    requires — same widened-acceptance idea as seq-ptp-top-p, just verified
+    against the self (LoRA-adapted) teacher instead of the real AR teacher.
+
+    As in SeqPTPSelfInference, this only overrides correct_tokens with the
+    teacher's own argmax pick for ar_mode="aux" (where tgt_logits is itself
+    z-conditioned via the same z the student used, so argmax-vs-argmax is the
+    right comparison); ar_mode="tok" keeps generate_seq's already-computed
+    stochastic correct_tokens (sample_from_logits at z_rnd), since tok's
+    teacher logits are an unconditioned plain causal forward with no same-z
+    issue to work around, and forcing argmax there is a known repetition-loop
+    attractor (see SeqPTPSelfInference.accepted_tokens).
+
+    Defaults to raw teacher logits (--raw), same reasoning as SeqPTPTopPInference.
+    """
+
+    name = "seq-ptp-top-p-self"
+
+    def __init__(self, lit_model, device, autocast_dtype, *, ar_mode: str = "aux",
+                 threshold: float = 0.9, raw: bool = True, **kwargs):
+        super().__init__(lit_model, device, autocast_dtype, ar_mode=ar_mode, raw=raw, **kwargs)
+        self.threshold = threshold
+
+    def accepted_tokens(self, student_tokens, correct_tokens, student_logits, tgt_logits, z_rnd):
+        n_prop = student_tokens.shape[1]
+        if self.ar_mode == "aux":
+            correct_tokens = tgt_logits.argmax(dim=-1)
+        tgt_probs = torch.softmax(tgt_logits[:, :-1].float(), dim=-1)  # [1, n_prop, V]
+        in_nucleus = _in_nucleus(tgt_probs, student_tokens, self.threshold)  # [n_prop]
+        matches = (student_tokens == correct_tokens[:, :-1])[0]  # [n_prop]
+        accept_mask = in_nucleus | matches
+        first_reject = n_prop if accept_mask.all() else int(accept_mask.long().argmin().item())
+        return correct_tokens[:, :first_reject + 1]
+
+    def extra_metrics(self) -> dict:
+        return {"threshold": self.threshold}
 
 
 class SeqPTPTreeInference(SeqTreeInference):
@@ -1844,6 +2055,23 @@ class SeqPTPChoiceKInference(SeqTreeInference):
     maximize E[accepted tokens] for that remaining budget. Both portions
     are computed once at construction.
 
+    mode="bayes-conjugate"/"bayes-p": like mode="optimal", but (p, rho) [resp.
+    just p] are re-estimated online per question instead of held at the fixed
+    v3 pooled constants, and the knapsack (_exact_optimal_lengths) is rerun
+    every round against the current posterior. "bayes-conjugate" exploits
+    exact Beta-Binomial conjugacy: Theta_i ~ Beta(alpha,beta) (population
+    prior, reparametrized from _BRANCH_P/_BRANCH_RHO) is conjugate to the
+    per-generation (m_d, j_d) Binomial-thinning transitions read directly off
+    each round's k-strand verification outcome (see _round_thinning), so
+    alpha/beta update in closed form and both p and rho move. pi0 stays fixed
+    (a handful of rounds can't identify a rare zero-inflation event). "bayes-p"
+    instead starts from the per-question hierarchical fit of p alone
+    (scratch/joint_per_question_results.json, nearest fitted ensemble width to
+    k; pi0/rho pooled-fixed there too) and, since that kernel has no conjugate
+    update, tracks the posterior over p on a discrete grid, reweighted each
+    round by the real v3 likelihood (via _branch_survival_table) of this
+    round's observed extinction time/censoring.
+
     Model background (scratch/correct.md secs 1-5): each generation d draws a
     shared frailty Theta_d ~ pi0*delta_0 + (1-pi0)*Beta(alpha,beta) and thins
     however many strands are still both alive and within their own length
@@ -1866,17 +2094,50 @@ class SeqPTPChoiceKInference(SeqTreeInference):
     # v3 joint-MLE fit (scratch/correct.md sec 5, scratch/v3_panel_data.json
     # "jointM"): pi0 applies from generation 2 on (generation 1 is pure
     # BetaBinomial), alpha/beta are the (p,rho) reparametrization of the
-    # per-generation frailty Beta(alpha,beta).
-    _BRANCH_PI0 = 0.061580373241815055
-    _BRANCH_P = 0.7129725279317468
-    _BRANCH_RHO = 0.858289157908181
+    # per-generation frailty Beta(alpha,beta). Keyed by checkpoint -- pass
+    # branch_fit="vicuna_old" (or add another entry here) to use a different
+    # checkpoint's own pooled fit instead of vicuna's original one (the default,
+    # kept as-is for backward compatibility with existing vicuna results).
+    _BRANCH_FITS = {
+        "vicuna": (0.061580373241815055, 0.7129725279317468, 0.858289157908181),
+        # scratch/fit_simple_joint.py vicuna_old_ -- same single-(pi0,p,rho)-for-all-K
+        # methodology, fit from vicuna_old's own exact-match choice-k collection.
+        "vicuna_old": (0.128466, 0.619881, 0.789348),
+        # scratch/fit_simple_joint.py vicuna_old_topp0.8_self_ -- same methodology, fit
+        # from vicuna_old's self-speculative + nucleus(0.8) collection instead of
+        # exact-match; use this one when the generation algorithm itself is a "...-self"
+        # variant at that same acceptance criterion, since its branching statistics
+        # differ meaningfully from exact-match's (see the corrected k=1000 fix).
+        "vicuna_old_self_topp0.8": (0.035939, 0.655973, 0.848974),
+    }
+    # Kept as class-attribute fallback defaults for _branch_survival_table's classmethod
+    # signature; every actual call site below passes explicit self._branch_pi0/p/rho.
+    _BRANCH_PI0 = _BRANCH_FITS["vicuna"][0]
+    _BRANCH_P = _BRANCH_FITS["vicuna"][1]
+    _BRANCH_RHO = _BRANCH_FITS["vicuna"][2]
 
     name = "seq-ptp-choice-k"
 
-    def __init__(self, lit_model, device, autocast_dtype, *, k: int = 4, mode: str = "standard", **kwargs):
+    # Nearest-fitted-K per-question hierarchical fits available for "bayes-p"
+    # (scratch/joint_per_question_results.json), keyed by their ensemble width.
+    _BAYES_P_FITS = {2: "choice2", 5: "choice5", 50: "choice50", 1000: "seqn1000"}
+
+    # Filename prefix for scratch/{prefix}joint_per_question_results.json, per
+    # analyze_branching_joint_per_question.py/_stage2.py's own --prefix convention --
+    # keyed the same as _BRANCH_FITS (bayes-p's prior and "oracle" both use this).
+    _PER_QUESTION_FIT_PREFIX = {
+        "vicuna": "",
+        "vicuna_old": "vicuna_old_",
+        "vicuna_old_self_topp0.8": "vicuna_old_topp0.8_self_",
+    }
+
+    def __init__(self, lit_model, device, autocast_dtype, *, k: int = 4, mode: str = "standard",
+                 phead_checkpoint: str | None = None, branch_fit: str = "vicuna", **kwargs):
         super().__init__(lit_model, device, autocast_dtype)
         self.k = k
         self.mode = mode
+        self._branch_pi0, self._branch_p, self._branch_rho = self._BRANCH_FITS[branch_fit]
+        self._example_idx = -1  # incremented at the start of each generate() call
         self._optimal_lengths: list[int] | None = None
         _optimal_full_frac = {"optimal": 0.0, "optimal-25": 0.25, "optimal-50": 0.5, "optimal-75": 0.75}
         if mode in _optimal_full_frac:
@@ -1884,7 +2145,49 @@ class SeqPTPChoiceKInference(SeqTreeInference):
             total_budget = k * cap_t
             n_full = int(total_budget * _optimal_full_frac[mode]) // cap_t
             knapsack_budget = total_budget - n_full * cap_t
-            self._optimal_lengths = [cap_t] * n_full + self._exact_optimal_lengths(knapsack_budget, cap_t)
+            self._optimal_lengths = [cap_t] * n_full + self._exact_optimal_lengths(
+                knapsack_budget, cap_t, pi0=self._branch_pi0, p=self._branch_p, rho=self._branch_rho)
+        elif mode in ("bayes-conjugate", "bayes-p"):
+            self._cap_t = lit_model.tokens_per_student_call
+            self._bayes_budget = k * self._cap_t
+            nu0 = (1 - self._branch_rho) / self._branch_rho
+            self._alpha0, self._beta0 = self._branch_p * nu0, (1 - self._branch_p) * nu0
+            if mode == "bayes-p":
+                nearest = min(self._BAYES_P_FITS, key=lambda kk: abs(kk - k))
+                pq_prefix = self._PER_QUESTION_FIT_PREFIX.get(branch_fit, "")
+                fit_path = (Path(__file__).resolve().parent.parent / "scratch" /
+                            f"{pq_prefix}joint_per_question_results.json")
+                with open(fit_path) as f:
+                    fit = json.load(f)[self._BAYES_P_FITS[nearest]]
+                self._prior_a, self._prior_b = fit["a"], fit["b"]
+                import numpy as np
+                self._p_grid = np.linspace(1e-3, 1 - 1e-3, 200)
+            self._reset_bayes_posterior()
+        elif mode == "phead":
+            assert phead_checkpoint is not None, "--phead-checkpoint is required for --choice-mode phead"
+            self._cap_t = lit_model.tokens_per_student_call
+            self._bayes_budget = k * self._cap_t
+            from ptp.p_head import PHead
+            sidecar = torch.load(phead_checkpoint, map_location="cpu", weights_only=False)
+            phead = PHead(lit_model.model.model.config.hidden_size)
+            phead.load_state_dict(sidecar["p_head_state_dict"])
+            self._phead = phead.to(device).eval()
+            lit_model.model.output_hidden_states = True
+        elif mode == "oracle":
+            # Per-question free-MLE p_hat_i from the earlier per-question hierarchical
+            # analysis (nearest-K fit, same lookup bayes-p uses to seed its prior) --
+            # an oracle upper bound for bayes-p/bayes-conjugate/phead, since it uses the
+            # whole question's data instead of an online/predicted estimate. Mirrors
+            # PTPInference's "beta_oracle" partial_mode.
+            self._cap_t = lit_model.tokens_per_student_call
+            self._bayes_budget = k * self._cap_t
+            nearest = min(self._BAYES_P_FITS, key=lambda kk: abs(kk - k))
+            pq_prefix = self._PER_QUESTION_FIT_PREFIX.get(branch_fit, "")
+            fit_path = (Path(__file__).resolve().parent.parent / "scratch" /
+                        f"{pq_prefix}joint_per_question_results.json")
+            with open(fit_path) as f:
+                fit = json.load(f)[self._BAYES_P_FITS[nearest]]
+            self._oracle_p_hat = fit["p_hat_i"]
 
     @classmethod
     def _branch_transition_matrix(cls, pi0: float, alpha: float, beta: float, w_max: int):
@@ -1907,14 +2210,20 @@ class SeqPTPChoiceKInference(SeqTreeInference):
         return mat
 
     @classmethod
-    def _branch_survival_table(cls, w_max: int, cap_t: int):
-        """S[w, d] = P(T_homogeneous(w) >= d) under the v3 model, d = 1..cap_t."""
+    def _branch_survival_table(cls, w_max: int, cap_t: int, *, pi0: float | None = None,
+                                p: float | None = None, rho: float | None = None):
+        """S[w, d] = P(T_homogeneous(w) >= d) under the v3 model, d = 1..cap_t.
+        pi0/p/rho default to the pooled v3 joint-fit constants; pass overrides
+        to evaluate the same model at a posterior/candidate (pi0, p, rho)."""
         import numpy as np
 
-        nu = (1 - cls._BRANCH_RHO) / cls._BRANCH_RHO
-        alpha, beta = cls._BRANCH_P * nu, (1 - cls._BRANCH_P) * nu
+        pi0 = cls._BRANCH_PI0 if pi0 is None else pi0
+        p = cls._BRANCH_P if p is None else p
+        rho = cls._BRANCH_RHO if rho is None else rho
+        nu = (1 - rho) / rho
+        alpha, beta = p * nu, (1 - p) * nu
         p0 = cls._branch_transition_matrix(0.0, alpha, beta, w_max)  # generation 1: pi0 exempt
-        pc = cls._branch_transition_matrix(cls._BRANCH_PI0, alpha, beta, w_max)  # generations 2..cap_t-1
+        pc = cls._branch_transition_matrix(pi0, alpha, beta, w_max)  # generations 2..cap_t-1
         surv = np.zeros((w_max + 1, cap_t + 1))
         surv[:, 1] = 1.0
         surv[0, :] = 0.0
@@ -1929,7 +2238,8 @@ class SeqPTPChoiceKInference(SeqTreeInference):
         return surv
 
     @classmethod
-    def _exact_optimal_lengths(cls, n_budget: int, cap_t: int) -> list[int]:
+    def _exact_optimal_lengths(cls, n_budget: int, cap_t: int, *, pi0: float | None = None,
+                                p: float | None = None, rho: float | None = None) -> list[int]:
         """
         Exact strand-length knapsack solver.
 
@@ -1942,14 +2252,15 @@ class SeqPTPChoiceKInference(SeqTreeInference):
         nonincreasing width profiles under the same budget, solved below by
         DP over depth (see _solve_width_profile). Doubles its width bound
         until the optimum doesn't touch it, so the result is exact regardless
-        of n_budget.
+        of n_budget. pi0/p/rho default to the pooled v3 constants; pass
+        overrides to solve under a posterior (pi0, p, rho) instead.
         """
         if n_budget <= 0:
             return []
 
         w_max = max(4 * (n_budget // cap_t) + 4 * cap_t, 1)
         while True:
-            surv = cls._branch_survival_table(w_max, cap_t)
+            surv = cls._branch_survival_table(w_max, cap_t, pi0=pi0, p=p, rho=rho)
             widths = cls._solve_width_profile(surv, n_budget, cap_t, w_max)
             if widths[0] < w_max:
                 break
@@ -1999,6 +2310,33 @@ class SeqPTPChoiceKInference(SeqTreeInference):
 
     def _strand_lengths(self, n_prop: int) -> list[int]:
         k = self.k
+        if self.mode in ("bayes-conjugate", "bayes-p"):
+            p, rho = self._current_p_rho()
+            lengths = self._exact_optimal_lengths(self._bayes_budget, self._cap_t,
+                                                   pi0=self._branch_pi0, p=p, rho=rho)
+            return [min(length, n_prop) for length in lengths]
+        if self.mode == "phead":
+            # p predicted per-round from the AR context hidden state (see
+            # src/ptp/p_head.py) instead of bayes-p's within-question online update --
+            # pooled pi0/rho, same knapsack as "optimal"/bayes-*.
+            context = self.lit_model._last_context_hidden
+            if context is None:
+                # generate_seq_tree's pre-loop sizing probe (tree() called once to
+                # measure max_n_nodes before any forward pass has run) -- fall back to
+                # the pooled constant, same as "optimal", since no context exists yet.
+                p_pred = self._branch_p
+            else:
+                with torch.no_grad():
+                    p_pred = self._phead(context.float()).item()
+            self._last_p_pred = p_pred
+            lengths = self._exact_optimal_lengths(self._bayes_budget, self._cap_t,
+                                                   pi0=self._branch_pi0, p=p_pred, rho=self._branch_rho)
+            return [min(length, n_prop) for length in lengths]
+        if self.mode == "oracle":
+            p = self._oracle_p_hat[self._example_idx % len(self._oracle_p_hat)]
+            lengths = self._exact_optimal_lengths(self._bayes_budget, self._cap_t,
+                                                   pi0=self._branch_pi0, p=p, rho=self._branch_rho)
+            return [min(length, n_prop) for length in lengths]
         if self._optimal_lengths is not None:
             return [min(length, n_prop) for length in self._optimal_lengths]
         if self.mode == "balanced":
@@ -2006,6 +2344,66 @@ class SeqPTPChoiceKInference(SeqTreeInference):
             n_rest = k - 1 - n_half
             return [n_prop] + [max(1, n_prop // 2)] * n_half + [max(1, n_prop // 4)] * n_rest
         return [n_prop] * k
+
+    def _reset_bayes_posterior(self):
+        """Reset online posterior state at the start of each question (generate() call)."""
+        if self.mode == "bayes-conjugate":
+            self._alpha_post, self._beta_post = self._alpha0, self._beta0
+        elif self.mode == "bayes-p":
+            from scipy import stats
+            self._log_post = stats.beta.logpdf(self._p_grid, self._prior_a, self._prior_b)
+
+    def _current_p_rho(self) -> tuple[float, float]:
+        if self.mode == "bayes-conjugate":
+            ab = self._alpha_post + self._beta_post
+            return self._alpha_post / ab, 1.0 / (ab + 1.0)
+        import numpy as np
+        weights = np.exp(self._log_post - self._log_post.max())
+        weights /= weights.sum()
+        return float(np.sum(weights * self._p_grid)), self._branch_rho
+
+    def _round_thinning(self, student_tokens, correct_tokens, parent_list):
+        """Per-generation Binomial-thinning transitions (m_d, j_d) for this
+        round's k-strand ensemble (m_d strands alive entering generation d,
+        j_d of them still matching), plus this round's extinction time and
+        whether it's right-censored (strands ran out of their own length
+        budget while still alive, rather than all dying) -- read directly off
+        the real per-node match outcomes, mirroring correct.md's v3 model."""
+        match = (student_tokens[0] == correct_tokens[0]).tolist()
+        roots = [i for i, par in enumerate(parent_list) if par is None]
+        bounds = roots + [len(parent_list)]
+        strands = [match[bounds[i]:bounds[i + 1]] for i in range(len(roots))]
+        alive = [True] * len(strands)
+        transitions = []
+        d = 0
+        while True:
+            at_risk = [i for i, s in enumerate(strands) if alive[i] and d < len(s)]
+            if not at_risk:
+                return transitions, d, True
+            j = sum(1 for i in at_risk if strands[i][d])
+            transitions.append((len(at_risk), j))
+            if j == 0:
+                return transitions, d + 1, False
+            for i in at_risk:
+                if not strands[i][d]:
+                    alive[i] = False
+            d += 1
+
+    def _bayes_update(self, student_tokens, correct_tokens, parent_list):
+        transitions, T_round, censored = self._round_thinning(student_tokens, correct_tokens, parent_list)
+        if self.mode == "bayes-conjugate":
+            for m, j in transitions:
+                self._alpha_post += j
+                self._beta_post += m - j
+            return
+        import numpy as np
+        log_lik = np.empty_like(self._p_grid)
+        for i, p in enumerate(self._p_grid):
+            surv = self._branch_survival_table(self.k, self._cap_t, pi0=self._branch_pi0, p=p, rho=self._branch_rho)
+            s = surv[self.k]
+            prob = s[T_round] if censored else (s[T_round] - s[T_round + 1] if T_round < self._cap_t else s[T_round])
+            log_lik[i] = np.log(max(prob, 1e-300))
+        self._log_post = self._log_post + log_lik
 
     def tree(self, n_prop: int) -> list[int | None]:
         """
@@ -2035,9 +2433,216 @@ class SeqPTPChoiceKInference(SeqTreeInference):
         self.parent_list = [p for _, p in nodes]
         return self.parent_list
 
+    def accepted_tokens(self, student_tokens, correct_tokens, student_logits, tgt_logits, z_rnd, parent_list):
+        result = super().accepted_tokens(student_tokens, correct_tokens, student_logits, tgt_logits, z_rnd, parent_list)
+        if self.mode in ("bayes-conjugate", "bayes-p"):
+            self._bayes_update(student_tokens, correct_tokens, parent_list)
+        return result
+
+    def generate(self, prompt_ids: torch.Tensor, max_new_tokens: int) -> tuple[torch.Tensor, dict]:
+        self._example_idx += 1
+        if self.mode in ("bayes-conjugate", "bayes-p"):
+            self._reset_bayes_posterior()
+        return super().generate(prompt_ids, max_new_tokens)
+
     def extra_metrics(self) -> dict:
         n_strands = len(self._optimal_lengths) if self._optimal_lengths is not None else self.k
-        return {"n_nodes": self.n_nodes, "k": self.k, "n_strands": n_strands, "choice_mode": self.mode}
+        metrics = {"n_nodes": self.n_nodes, "k": self.k, "n_strands": n_strands, "choice_mode": self.mode}
+        if self.mode in ("bayes-conjugate", "bayes-p"):
+            p, rho = self._current_p_rho()
+            metrics["bayes_p"] = p
+            metrics["bayes_rho"] = rho
+        elif self.mode == "phead" and hasattr(self, "_last_p_pred"):
+            metrics["phead_p"] = self._last_p_pred
+        elif self.mode == "oracle":
+            metrics["oracle_p"] = self._oracle_p_hat[self._example_idx % len(self._oracle_p_hat)]
+        return metrics
+
+
+class SeqPTPTopPChoiceKInference(SeqPTPChoiceKInference):
+    """
+    SeqPTPChoiceKInference's k-strand tree proposals (k, mode/choice_mode) combined
+    with SeqPTPTopPInference's nucleus acceptance criterion: verification uses a real,
+    separate teacher call (generate_seq_tree's default tree-masked teacher_forward),
+    not the self-speculative LoRA-adapted forward SeqPTPTopPChoiceKSelfInference uses
+    -- so there's no ar_mode split (aux vs tok) to make here.
+
+    A tree node is accepted if it exactly matches correct_tokens OR falls inside the
+    teacher's top-p nucleus at that node's own parent context (mirrors
+    SeqPTPTopPInference's per-position criterion, generalized to the tree: walk each
+    strand's matching prefix via SeqTreeInference's best-path logic and append the
+    teacher's correction token, same as SeqPTPChoiceKInference's inherited
+    accepted_tokens does for exact-match-only acceptance).
+    """
+
+    name = "seq-ptp-top-p-choice-k"
+
+    def __init__(self, lit_model, device, autocast_dtype, *, k: int = 4, mode: str = "standard",
+                 threshold: float = 0.9, **kwargs):
+        super().__init__(lit_model, device, autocast_dtype, k=k, mode=mode, **kwargs)
+        self.threshold = threshold
+
+    def accepted_tokens(self, student_tokens, correct_tokens, student_logits, tgt_logits, z_rnd, parent_list):
+        n_nodes = student_tokens.shape[1]
+        depth_list = self._depths(parent_list)
+        tgt_probs = torch.softmax(tgt_logits.float(), dim=-1)  # [1, n_nodes, V]
+        in_nucleus = _in_nucleus(tgt_probs, student_tokens, self.threshold)  # [n_nodes]
+        exact = (student_tokens[0] == correct_tokens[0])
+        match = (in_nucleus | exact).tolist()
+
+        children: dict[int, list[int]] = {i: [] for i in range(n_nodes)}
+        roots: list[int] = []
+        for i, p in enumerate(parent_list):
+            (roots if p is None else children[p]).append(i)
+
+        def best_path(node: int) -> list[int]:
+            if not match[node]:
+                return []
+            best_child: list[int] = max(
+                (best_path(c) for c in children[node]), key=len, default=[],
+            )
+            return [node] + best_child
+
+        path = max((best_path(r) for r in roots), key=len, default=[])
+        if not path:
+            result = correct_tokens[:, roots[0]:roots[0] + 1]
+        else:
+            last = path[-1]
+            correction = next(
+                (c for c in children[last] if depth_list[c] == depth_list[last] + 1), None,
+            )
+            if correction is not None:
+                result = torch.cat([student_tokens[:, path], correct_tokens[:, correction:correction + 1]], dim=1)
+            else:
+                result = student_tokens[:, path]
+        if self.mode in ("bayes-conjugate", "bayes-p"):
+            self._bayes_update(student_tokens, correct_tokens, parent_list)
+        return result
+
+    def extra_metrics(self) -> dict:
+        metrics = super().extra_metrics()
+        metrics["threshold"] = self.threshold
+        return metrics
+
+
+class SeqPTPTopPChoiceKSelfInference(SeqPTPChoiceKInference):
+    """
+    SeqPTPChoiceKInference's k-strand tree proposals (k, mode/choice_mode) combined
+    with SeqPTPTopPSelfInference's self-speculative + nucleus acceptance: verification
+    reuses the model's own LoRA-adapted predictions instead of a separate teacher, and
+    a proposed token is accepted if it falls in the (self) teacher's top-p nucleus, not
+    just an exact match.
+
+    Only ar_mode="tok" is supported. student_forward/teacher_forward replicate the
+    exact tree-masked attention generate_seq_tree's default (student_forward=None /
+    teacher_forward=None) path already builds via _build_tree_mask, just wrapped in
+    _full_lora_mode so LoRA is merged everywhere (backlog context included) instead of
+    gated to the aux/tree-node window -- the same student+teacher KV-cache-consistency
+    fix SeqPTPSelfInference's ar_mode="tok" needed, generalized to the tree case.
+
+    ar_mode="aux" isn't implemented: SeqPTPSelfInference's flat aux-probe verifier
+    builds one z-conditioned probe per *prefix length* along a single chain: gener-
+    alizing that to k independent strands means one z-conditioned probe per *tree
+    node*, each masked to attend only to its own strand's ancestor chain -- a new
+    masked-attention construction, not just reusing existing pieces, so it's left
+    unimplemented for now rather than risking a subtly-wrong probe mask.
+    """
+
+    name = "seq-ptp-top-p-choice-k-self"
+
+    def __init__(self, lit_model, device, autocast_dtype, *, k: int = 4, mode: str = "standard",
+                 ar_mode: str = "aux", threshold: float = 0.9, **kwargs):
+        assert ar_mode == "tok", (
+            f"seq-ptp-top-p-choice-k-self only supports ar_mode='tok' for now (got "
+            f"{ar_mode!r}) -- a per-node aux-probe verifier for the k-strand tree isn't "
+            f"implemented; see this class's docstring for what that would need."
+        )
+        super().__init__(lit_model, device, autocast_dtype, k=k, mode=mode, **kwargs)
+        self.ar_mode = ar_mode
+        self.threshold = threshold
+        # tok-only, so student and teacher always compute the real-token prefix via
+        # the same merged-LoRA forward -- share one cache (see SeqPTPSelfInference).
+        self.shared_kv_cache = True
+
+    def student_forward(self, input_ids, auxiliaries, past_key_values, parent_list):
+        with _full_lora_mode(self.lit_model):
+            if parent_list is None:
+                # Initial prompt prefill: no tree yet, plain forward suffices.
+                return self.lit_model.model.inference_forward(
+                    input_ids=input_ids, auxiliaries=auxiliaries,
+                    past_key_values=past_key_values, use_cache=True,
+                )
+            n_nodes = len(parent_list)
+            mask, pos_ids = self.lit_model._build_tree_mask(
+                input_ids.shape[1], n_nodes, past_key_values.get_seq_length(),
+                input_ids.device, parent_list,
+            )
+            return self.lit_model.model.inference_forward(
+                input_ids=input_ids, auxiliaries=auxiliaries,
+                past_key_values=past_key_values, use_cache=True,
+                attention_mask=mask, position_ids=pos_ids,
+            )
+
+    def teacher_forward(self, input_ids, past_key_values, use_cache, parent_list):
+        n_nodes = len(parent_list)
+        T_ar = input_ids.shape[1] - n_nodes
+        mask, pos_ids = self.lit_model._build_tree_mask(
+            T_ar, n_nodes, past_key_values.get_seq_length(), input_ids.device, parent_list,
+        )
+        with _full_lora_mode(self.lit_model):
+            return self.lit_model.model.inference_forward(
+                input_ids=input_ids, auxiliaries=None,
+                past_key_values=past_key_values, use_cache=use_cache,
+                attention_mask=mask, position_ids=pos_ids,
+            )
+
+    def accepted_tokens(self, student_tokens, correct_tokens, student_logits, tgt_logits, z_rnd, parent_list):
+        # Unlike SeqPTPSelfInference/SeqPTPTopPSelfInference's ar_mode="aux" branch,
+        # this class is tok-only: tgt_logits comes from a plain, unconditioned causal
+        # forward (no z-conditioning), so there's no same-z mismatch to work around --
+        # keep generate_seq_tree's already-computed stochastic correct_tokens
+        # (sample_from_logits at z_rnd) rather than forcing argmax, which is a known
+        # repetition-loop attractor (see SeqPTPSelfInference.accepted_tokens).
+        n_nodes = student_tokens.shape[1]
+        depth_list = self._depths(parent_list)
+        tgt_probs = torch.softmax(tgt_logits.float(), dim=-1)  # [1, n_nodes, V]
+        in_nucleus = _in_nucleus(tgt_probs, student_tokens, self.threshold)  # [n_nodes]
+        exact = (student_tokens[0] == correct_tokens[0])
+        match = (in_nucleus | exact).tolist()
+
+        children: dict[int, list[int]] = {i: [] for i in range(n_nodes)}
+        roots: list[int] = []
+        for i, p in enumerate(parent_list):
+            (roots if p is None else children[p]).append(i)
+
+        def best_path(node: int) -> list[int]:
+            if not match[node]:
+                return []
+            best_child: list[int] = max(
+                (best_path(c) for c in children[node]), key=len, default=[],
+            )
+            return [node] + best_child
+
+        path = max((best_path(r) for r in roots), key=len, default=[])
+        if not path:
+            result = correct_tokens[:, roots[0]:roots[0] + 1]
+        else:
+            last = path[-1]
+            correction = next(
+                (c for c in children[last] if depth_list[c] == depth_list[last] + 1), None,
+            )
+            if correction is not None:
+                result = torch.cat([student_tokens[:, path], correct_tokens[:, correction:correction + 1]], dim=1)
+            else:
+                result = student_tokens[:, path]
+        if self.mode in ("bayes-conjugate", "bayes-p"):
+            self._bayes_update(student_tokens, correct_tokens, parent_list)
+        return result
+
+    def extra_metrics(self) -> dict:
+        metrics = super().extra_metrics()
+        metrics["threshold"] = self.threshold
+        return metrics
 
 
 class SeqNPTPChoiceKInference(SeqPTPChoiceKInference):
@@ -2104,6 +2709,36 @@ class SeqNPTPChoiceKInference(SeqPTPChoiceKInference):
             (c for c in children[last] if depth_list[c] == depth_list[last] + 1), None,
         )
         return path, correction
+
+    def _match_mask(self, student_tokens, correct_tokens, tgt_logits) -> list[bool]:
+        """Per-node accept/reject test, applied to every strand in every block. Exact
+        match here; SeqNPTPTopPChoiceKInference overrides this for nucleus acceptance."""
+        return (student_tokens[0] == correct_tokens[0]).tolist()
+
+    def _teacher_block_forward(self, teacher_fed, kv_teacher, mask, pos_ids):
+        """Per-block teacher verification forward. A real (ungated, unconditioned)
+        causal pass here; SeqNPTPTopPChoiceKSelfInference overrides this to verify
+        against the model's own merged-LoRA prediction instead (self-speculative)."""
+        return self.lit_model.model.inference_forward(
+            input_ids=teacher_fed, auxiliaries=None,
+            past_key_values=kv_teacher, use_cache=True,
+            attention_mask=mask, position_ids=pos_ids,
+        )
+
+    def _student_block_forward(self, input_ids_student, z_rnd, kv_student, mask, pos_ids):
+        """Per-block student proposal forward: gate_window=n_nodes (LoRA only on the
+        aux/proposed tail), so the real-token prefix this call feeds into kv_student is
+        computed ungated -- matching this class's ungated _teacher_block_forward, which
+        keeps root nodes' tgt_logits_root (from this call) and tgt_logits (from the
+        teacher call, same bridge position) on the SAME distribution, as
+        correct_first_token-style root matching requires. SeqNPTPTopPChoiceKSelfInference
+        overrides this to also merge LoRA everywhere, keeping that same-distribution
+        property when its teacher call switches to merged-LoRA too."""
+        return self.lit_model.model.inference_forward(
+            input_ids=input_ids_student, auxiliaries=z_rnd[None, :],
+            past_key_values=kv_student, use_cache=True,
+            attention_mask=mask, position_ids=pos_ids,
+        )
 
     def generate(self, prompt_ids: torch.Tensor, max_new_tokens: int) -> tuple[torch.Tensor, dict]:
         autocast_ctx = (
@@ -2174,11 +2809,7 @@ class SeqNPTPChoiceKInference(SeqPTPChoiceKInference):
                 mask, pos_ids = lit_model._build_tree_mask(
                     input_ids_student.shape[1], n_nodes, K_student_start, device, parent_list,
                 )
-                outputs = lit_model.model.inference_forward(
-                    input_ids=input_ids_student, auxiliaries=z_rnd[None, :],
-                    past_key_values=kv_student, use_cache=True,
-                    attention_mask=mask, position_ids=pos_ids,
-                )
+                outputs = self._student_block_forward(input_ids_student, z_rnd, kv_student, mask, pos_ids)
                 kv_student.crop(kv_student.get_seq_length() - n_nodes if is_last_block else K_student_start)
                 full_logits = outputs.logits
                 student_logits = full_logits[:, -n_nodes:]
@@ -2194,11 +2825,7 @@ class SeqNPTPChoiceKInference(SeqPTPChoiceKInference):
                 mask, pos_ids = lit_model._build_tree_mask(
                     T_ar, n_nodes, K_teacher_start, device, parent_list,
                 )
-                outputs = lit_model.model.inference_forward(
-                    input_ids=teacher_fed, auxiliaries=None,
-                    past_key_values=kv_teacher, use_cache=True,
-                    attention_mask=mask, position_ids=pos_ids,
-                )
+                outputs = self._teacher_block_forward(teacher_fed, kv_teacher, mask, pos_ids)
                 kv_teacher.crop(kv_teacher.get_seq_length() - n_nodes if is_last_block else K_teacher_start)
                 src_idx = torch.tensor(
                     [T_ar - 1 if p is None else T_ar + p for p in parent_list], device=device,
@@ -2206,7 +2833,7 @@ class SeqNPTPChoiceKInference(SeqPTPChoiceKInference):
                 tgt_logits = lit_model.adapt_logits(outputs.logits[:, src_idx])
                 correct_tokens = lit_model.sample_from_logits(tgt_logits, z_rnd)
 
-                match = (student_tokens[0] == correct_tokens[0]).tolist()
+                match = self._match_mask(student_tokens, correct_tokens, tgt_logits)
                 path, correction = self._best_path(parent_list, match)
                 if not path:
                     # Guaranteed to match via correct_first_token.
@@ -2232,6 +2859,73 @@ class SeqNPTPChoiceKInference(SeqPTPChoiceKInference):
                 break
 
         return prompt_ids, n_calls, correct_all
+
+
+class SeqNPTPTopPChoiceKInference(SeqNPTPChoiceKInference):
+    """
+    SeqNPTPChoiceKInference's block-wise choice-k proposals combined with
+    SeqPTPTopPChoiceKInference's nucleus acceptance criterion: a node is accepted if
+    it exactly matches correct_tokens OR falls inside the teacher's top-p nucleus at
+    that node's own parent context -- same idea as SeqPTPTopPChoiceKInference, just
+    plugged into _generate_blocked's per-block _match_mask hook instead of
+    generate_seq_tree's accepted_tokens callback (this class bypasses that entirely,
+    see SeqNPTPChoiceKInference's docstring).
+    """
+
+    name = "seq-n-ptp-top-p-choice-k"
+
+    def __init__(self, lit_model, device, autocast_dtype, *, k: int = 200, block_size: int = 50,
+                 threshold: float = 0.9, **kwargs):
+        super().__init__(lit_model, device, autocast_dtype, k=k, block_size=block_size, **kwargs)
+        self.threshold = threshold
+
+    def _match_mask(self, student_tokens, correct_tokens, tgt_logits) -> list[bool]:
+        tgt_probs = torch.softmax(tgt_logits.float(), dim=-1)
+        in_nucleus = _in_nucleus(tgt_probs, student_tokens, self.threshold)
+        exact = (student_tokens[0] == correct_tokens[0])
+        return (in_nucleus | exact).tolist()
+
+
+class SeqNPTPTopPChoiceKSelfInference(SeqNPTPTopPChoiceKInference):
+    """
+    SeqNPTPTopPChoiceKInference's block-wise nucleus acceptance, but verified against
+    the model's own merged-LoRA prediction (self-speculative, ar_mode="tok" convention)
+    instead of a real separate teacher call -- mirrors SeqPTPTopPChoiceKSelfInference's
+    student_forward/teacher_forward, applied per block via _student_block_forward /
+    _teacher_block_forward.
+
+    Both overrides are required together: merging LoRA into only the teacher call (as
+    an earlier version of this class did) makes root nodes' tgt_logits_root (from the
+    student call, ungated real-token prefix) and tgt_logits (from the teacher call, now
+    LoRA-merged real-token prefix) come from two different distributions at the SAME
+    bridge position -- silently breaking the same-z-same-distribution guarantee
+    correct_first_token-style root matching relies on, which surfaced as an elevated
+    G=1 (immediate root-mismatch) rate specifically at k=1000 relative to the tree-based
+    self class (which shares one merged-everywhere cache and never had this asymmetry).
+
+    Unlike the tree-based self class, this keeps _generate_blocked's separate
+    kv_student/kv_teacher caches rather than sharing one -- with both now merged-LoRA
+    for the real-token prefix, they compute numerically identical results, so this only
+    costs the (already-paid-for-every-block) redundant compute, not correctness.
+    """
+
+    name = "seq-n-ptp-top-p-choice-k-self"
+
+    def _student_block_forward(self, input_ids_student, z_rnd, kv_student, mask, pos_ids):
+        with _full_lora_mode(self.lit_model):
+            return self.lit_model.model.inference_forward(
+                input_ids=input_ids_student, auxiliaries=z_rnd[None, :],
+                past_key_values=kv_student, use_cache=True,
+                attention_mask=mask, position_ids=pos_ids,
+            )
+
+    def _teacher_block_forward(self, teacher_fed, kv_teacher, mask, pos_ids):
+        with _full_lora_mode(self.lit_model):
+            return self.lit_model.model.inference_forward(
+                input_ids=teacher_fed, auxiliaries=None,
+                past_key_values=kv_teacher, use_cache=True,
+                attention_mask=mask, position_ids=pos_ids,
+            )
 
 
 class FullLoRAPTPInference:
@@ -2273,6 +2967,62 @@ class FullLoRAPTPInference:
             "num_calls": ptp_metrics.get("num_calls", 0),
             "correct_per_call": float(ptp_metrics.get("correct_per_call", float("nan"))),
             "tokens_per_student_call": self.max_tokens_per_proposal,
+        }
+
+
+class PTPTopPChoiceKSelfInference:
+    """
+    Single-call analog of SeqPTPTopPChoiceKSelfInference ("seq-ptp-top-p-choice-k-self"),
+    the same way FullLoRAPTPInference ("ptp_self") is the single-call analog of
+    SeqPTPSelfInference ("seq-ptp-self"). Maintains k independent candidate strands,
+    verified and re-proposed together in one masked forward call per round (see
+    lit.py's generate_tree), pruned to the single longest-verified-accepted candidate
+    every round via a plain trailing KV-cache crop (no non-contiguous cache repack) --
+    accepted via exact-match-or-top-p-nucleus against the model's own merged-LoRA
+    (self) forward.
+    """
+
+    name = "ptp-top-p-choice-k-self"
+
+    def __init__(self, lit_model, device, autocast_dtype, *, k: int = 4,
+                 threshold: float = 0.9, max_tokens_per_proposal: int, total_token_budget: int):
+        self.lit_model = lit_model
+        self.device = device
+        self.autocast_dtype = autocast_dtype
+        self.k = k
+        self.threshold = threshold
+        self.max_tokens_per_proposal = max_tokens_per_proposal
+        # Explicit H_fn wiring -- ptp_self's known bug is that it never sets this,
+        # silently inheriting lit.py's dummy arange(21) default (see FullLoRAPTPInference
+        # above). Same H(k)=k value here (literal partial_mode="count"), but intentional.
+        lit_model.H_fn = lambda metrics: PTPInference.compute_H("count", lit_model.hist_base, metrics)
+
+    def generate(self, prompt_ids: torch.Tensor, max_new_tokens: int) -> tuple[torch.Tensor, dict]:
+        autocast_ctx = (
+            torch.autocast(self.device.type, dtype=self.autocast_dtype)
+            if self.autocast_dtype is not None
+            else contextlib.nullcontext()
+        )
+        t0 = time.perf_counter()
+        with autocast_ctx, _full_lora_mode(self.lit_model):
+            completion, ptp_metrics = self.lit_model.generate_tree(
+                {"prompt_ids": prompt_ids},
+                max_new_tokens=max_new_tokens,
+                k=self.k,
+                nucleus_threshold=self.threshold,
+                return_metrics=True,
+            )
+        elapsed_ms = (time.perf_counter() - t0) * 1000.0
+        n_gen = completion.shape[1] - prompt_ids.shape[1]
+        return completion, {
+            "n_generated_tokens": n_gen,
+            "elapsed_ms": elapsed_ms,
+            "ms_per_token": elapsed_ms / n_gen if n_gen > 0 else float("nan"),
+            "num_calls": ptp_metrics.get("num_calls", 0),
+            "correct_per_call": float(ptp_metrics.get("correct_per_call", float("nan"))),
+            "tokens_per_student_call": self.max_tokens_per_proposal,
+            "k": self.k,
+            "threshold": self.threshold,
         }
 
 
@@ -2394,6 +3144,7 @@ ALGORITHMS: dict[str, type] = {
     "ptp": PTPInference,
     "seq-ptp": SequentialPTPInference,
     "seq-ptp-self": SeqPTPSelfInference,
+    "seq-ptp-top-p-self": SeqPTPTopPSelfInference,
     "ar": ARInference,
     "det_ar": DeterministicARInference,
     "first-k": AcceptFirstKInference,
@@ -2421,11 +3172,16 @@ ALGORITHMS: dict[str, type] = {
     "ptp-judge": PTPJudgeInference,
     "seq-ptp-tree": SeqPTPTreeInference,
     "seq-ptp-choice-k": SeqPTPChoiceKInference,
+    "seq-ptp-top-p-choice-k": SeqPTPTopPChoiceKInference,
+    "seq-ptp-top-p-choice-k-self": SeqPTPTopPChoiceKSelfInference,
     "seq-n-ptp-choice-k": SeqNPTPChoiceKInference,
+    "seq-n-ptp-top-p-choice-k": SeqNPTPTopPChoiceKInference,
+    "seq-n-ptp-top-p-choice-k-self": SeqNPTPTopPChoiceKSelfInference,
     "ratio": RatioInference,
     "ratio-k": RatioKInference,
     "ratio-p": RatioPInference,
     "ptp_self": FullLoRAPTPInference,
+    "ptp-top-p-choice-k-self": PTPTopPChoiceKSelfInference,
     "oracle_ptp": OraclePTPInference,  # ORACLE DEBUG — remove after testing
     "ref": ReferenceInference,
 }
@@ -2968,6 +3724,11 @@ def main(
     referee: str = "Qwen/Qwen2.5-7B-Instruct",
     judge_prompt: str = "mid",
     choice_mode: str = "standard",
+    partial_mode: str = "count",
+    phead_checkpoint: str | None = None,
+    chead_checkpoint: str | None = None,
+    ar_mode: str = "aux",
+    branch_fit: str = "vicuna",
 ):
     torch.manual_seed(seed)
 
@@ -3007,9 +3768,25 @@ def main(
     if algorithm not in ALGORITHMS:
         raise ValueError(f"Unknown algorithm '{algorithm}'. Available: {list(ALGORITHMS)}")
     algo_cls = ALGORITHMS[algorithm]
-    if algorithm in ("ptp", "ptp_self", "oracle_ptp"):  # oracle_ptp: ORACLE DEBUG
+    if algorithm == "ptp":
         algo = algo_cls(
             lit_model, device, autocast_dtype,
+            max_tokens_per_proposal=max_tokens_per_proposal,
+            total_token_budget=total_budget,
+            partial_mode=partial_mode,
+            phead_checkpoint=phead_checkpoint,
+            chead_checkpoint=chead_checkpoint,
+        )
+    elif algorithm in ("ptp_self", "oracle_ptp"):  # oracle_ptp: ORACLE DEBUG
+        algo = algo_cls(
+            lit_model, device, autocast_dtype,
+            max_tokens_per_proposal=max_tokens_per_proposal,
+            total_token_budget=total_budget,
+        )
+    elif algorithm == "ptp-top-p-choice-k-self":
+        algo = algo_cls(
+            lit_model, device, autocast_dtype,
+            k=int(k), threshold=p,
             max_tokens_per_proposal=max_tokens_per_proposal,
             total_token_budget=total_budget,
         )
@@ -3020,7 +3797,9 @@ def main(
             total_token_budget=total_budget,
         )
     elif algorithm == "seq-ptp-self":
-        algo = algo_cls(lit_model, device, autocast_dtype)
+        algo = algo_cls(lit_model, device, autocast_dtype, ar_mode=ar_mode)
+    elif algorithm == "seq-ptp-top-p-self":
+        algo = algo_cls(lit_model, device, autocast_dtype, ar_mode=ar_mode, threshold=p)
     elif algorithm == "ar":
         algo = algo_cls(lit_model, device, autocast_dtype,
                         temperature=getattr(lit_model, 'temperature', temperature),
@@ -3078,7 +3857,15 @@ def main(
     elif algorithm == "seq-ptp-tree":
         algo = algo_cls(lit_model, device, autocast_dtype)
     elif algorithm == "seq-ptp-choice-k":
-        algo = algo_cls(lit_model, device, autocast_dtype, k=int(k), mode=choice_mode)
+        algo = algo_cls(lit_model, device, autocast_dtype, k=int(k), mode=choice_mode,
+                        phead_checkpoint=phead_checkpoint, branch_fit=branch_fit)
+    elif algorithm == "seq-ptp-top-p-choice-k":
+        algo = algo_cls(lit_model, device, autocast_dtype, k=int(k), mode=choice_mode, threshold=p,
+                        phead_checkpoint=phead_checkpoint, branch_fit=branch_fit)
+    elif algorithm == "seq-ptp-top-p-choice-k-self":
+        algo = algo_cls(lit_model, device, autocast_dtype, k=int(k), mode=choice_mode,
+                        ar_mode=ar_mode, threshold=p, phead_checkpoint=phead_checkpoint,
+                        branch_fit=branch_fit)
     elif algorithm == "seq-n-ptp-choice-k":
         algo = algo_cls(lit_model, device, autocast_dtype, k=int(k))
     elif algorithm == "seq-thresh-p":
@@ -3177,6 +3964,16 @@ def main(
             algo_tag = f"seq-ptp-choice-{int(k)}"
             if choice_mode != "standard":
                 algo_tag += f"-{choice_mode}"
+        elif algorithm == "seq-ptp-top-p-choice-k":
+            algo_tag = f"seq-ptp-topp-choice-{int(k)}-{p}"
+            if choice_mode != "standard":
+                algo_tag += f"-{choice_mode}"
+        elif algorithm == "seq-ptp-top-p-choice-k-self":
+            algo_tag = f"seq-ptp-topp-choice-{int(k)}-self-{p}"
+            if choice_mode != "standard":
+                algo_tag += f"-{choice_mode}"
+            if ar_mode != "aux":
+                algo_tag += f"-{ar_mode}"
         elif algorithm == "seq-n-ptp-choice-k":
             algo_tag = f"seq-n-ptp-choice-{int(k)}"
         elif algorithm == "seq-thresh-p":
@@ -3191,6 +3988,14 @@ def main(
             algo_tag = f"thresh-{p}"
         elif algorithm == "conf-p":
             algo_tag = f"conf-p-{p}"
+        elif algorithm == "ptp":
+            algo_tag = "ptp" if partial_mode == "count" else f"ptp-{partial_mode}"
+        elif algorithm == "ptp-top-p-choice-k-self":
+            algo_tag = f"ptp-topp-choice-{int(k)}-self-{p}"
+        elif algorithm == "seq-ptp-self":
+            algo_tag = "seq-ptp-self" if ar_mode == "aux" else f"seq-ptp-self-{ar_mode}"
+        elif algorithm == "seq-ptp-top-p-self":
+            algo_tag = f"seq-ptp-topp-self-{p}" if ar_mode == "aux" else f"seq-ptp-topp-self-{p}-{ar_mode}"
         else:
             algo_tag = algorithm
         _raw_algorithms = {
@@ -3408,7 +4213,8 @@ def _parse_args():
     )
     parser.add_argument(
         "--choice-mode",
-        choices=["standard", "balanced", "optimal", "optimal-25", "optimal-50", "optimal-75"],
+        choices=["standard", "balanced", "optimal", "optimal-25", "optimal-50", "optimal-75",
+                 "bayes-conjugate", "bayes-p", "phead", "oracle"],
         default="standard",
         help="For --algorithm seq-ptp-choice-k: 'standard' (default) makes all k strands "
              "n_prop deep; 'balanced' makes 1 strand n_prop deep, k//4 strands n_prop//2 deep, "
@@ -3416,7 +4222,65 @@ def _parse_args():
              "maximizes expected accepted tokens for the same total node budget "
              "(k * tokens_per_student_call), per the branching-process model in scratch/correct.md; "
              "'optimal-25'/'optimal-50'/'optimal-75' spend that percentage of the budget on full "
-             "n_prop-deep strands and hand the rest to the same optimizer",
+             "n_prop-deep strands and hand the rest to the same optimizer; 'bayes-conjugate' and "
+             "'bayes-p' are online per-question variants of 'optimal' that re-estimate (p, rho) "
+             "[resp. just p] from this question's own observed rounds instead of the fixed pooled "
+             "v3 constants -- 'bayes-conjugate' via exact Beta-Binomial conjugacy, 'bayes-p' via a "
+             "grid posterior seeded from the per-question hierarchical fit in "
+             "scratch/joint_per_question_results.json; 'phead' is like 'optimal' but p is predicted "
+             "per-round directly from the AR context hidden state by a fine-tuned P-head (see "
+             "src/ptp/p_head.py, same sidecar as --partial-mode phead for --algorithm ptp), pooled "
+             "pi0/rho -- requires --phead-checkpoint; 'oracle' uses the precomputed per-question "
+             "free-MLE p_hat_i from scratch/joint_per_question_results.json (nearest-K fit, same "
+             "lookup 'bayes-p' uses to seed its prior) -- an oracle upper bound for 'bayes-p'/"
+             "'bayes-conjugate'/'phead' since it sees the whole question's data instead of an "
+             "online or predicted estimate, mirrors --algorithm ptp's 'beta_oracle' partial_mode.",
+    )
+    parser.add_argument(
+        "--partial-mode",
+        choices=["count", "hist", "geom", "beta", "phead", "chead", "beta_oracle"],
+        default="count",
+        help="For --algorithm ptp: how the reward matrix H(k) (estimated # correct tokens "
+             "given k proposed tokens) is computed. 'count' (default): H(k) = k. "
+             "'hist': H(k) = E[min(G, k)] under the empirical histogram hist_base. "
+             "'geom': H(k) = E[min(G, k)] under the shifted-geometric model "
+             "G = 1 + Geometric(p), p=0.698 fitted over all questions (see scratch/correct.md). "
+             "'beta': like 'geom', but p is the posterior mean of a population Beta prior "
+             "(jointly fit over all questions) updated online with the #correct-per-call "
+             "samples seen so far this generation. "
+             "'phead': p is predicted per-call from context by a fine-tuned P-head "
+             "(see scripts/finetune.py); requires --phead-checkpoint. "
+             "'chead': like 'hist', but the full 21-class distribution over #correct is "
+             "predicted per-call from context by a fine-tuned C-head (non-parametric; see "
+             "scripts/finetune.py --head-type c); requires --chead-checkpoint. "
+             "'beta_oracle': p is the precomputed per-question free MLE from "
+             "scratch/joint_per_question_results.json (an oracle upper bound for 'beta').",
+    )
+    parser.add_argument(
+        "--phead-checkpoint", type=Path, default=None,
+        help="Path to a p_head sidecar checkpoint (e.g. <ckpt>_phead_ft.ckpt from "
+             "scripts/finetune.py), required for --partial-mode phead.",
+    )
+    parser.add_argument(
+        "--chead-checkpoint", type=Path, default=None,
+        help="Path to a c_head sidecar checkpoint (e.g. <ckpt>_chead_ft.ckpt from "
+             "scripts/finetune.py --head-type c), required for --partial-mode chead.",
+    )
+    parser.add_argument(
+        "--ar-mode", choices=["aux", "tok"], default="aux",
+        help="For --algorithm seq-ptp-self / seq-ptp-top-p-self: 'aux' (default) verifies "
+             "with the current gated-LoRA aux-probe mechanism (self-speculative). 'tok' "
+             "verifies with a plain ungated causal forward through this same model instead "
+             "— the same fallback plain seq-ptp uses (self.model.inference_forward), just "
+             "with no separate teacher model.",
+    )
+    parser.add_argument(
+        "--branch-fit", choices=list(SeqPTPChoiceKInference._BRANCH_FITS), default="vicuna",
+        help="For --algorithm seq-ptp-choice-k / seq-ptp-top-p-choice-k / "
+             "seq-ptp-top-p-choice-k-self: which checkpoint's pooled (pi0, p, rho) v3 "
+             "branching fit to use for 'optimal*'/'bayes-*'/'phead'/'oracle' choice-modes "
+             "(default: 'vicuna', the original fit). Pass 'vicuna_old' when running "
+             "against that checkpoint instead, to avoid a stale-fit mismatch.",
     )
     args = parser.parse_args()
 
@@ -3458,6 +4322,11 @@ def _parse_args():
         referee=args.referee,
         judge_prompt=args.prompt,
         choice_mode=args.choice_mode,
+        partial_mode=args.partial_mode,
+        phead_checkpoint=args.phead_checkpoint,
+        chead_checkpoint=args.chead_checkpoint,
+        ar_mode=args.ar_mode,
+        branch_fit=args.branch_fit,
     )
 
 

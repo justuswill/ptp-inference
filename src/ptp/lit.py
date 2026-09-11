@@ -1,3 +1,4 @@
+import contextlib
 import warnings
 
 from lightning.pytorch import LightningModule
@@ -31,7 +32,8 @@ class ParallelSamplingLightningModule(LightningModule):
                  temperature: float | None = None,
                  top_k: int | None = None,
                  top_p: float | None = None,
-                 hist_base: list[float] | None = None):
+                 hist_base: list[float] | None = None,
+                 self_mode: bool = False):
         if pbar_metrics is None:
             pbar_metrics = ['correct']
             if completion_loss_weight > 0.0:
@@ -51,6 +53,25 @@ class ParallelSamplingLightningModule(LightningModule):
 
         self.tokens_per_student_call = tokens_per_student_call
         self.total_token_budget: int | None = None
+        # Reward matrix used by proposals(); called as H_fn(metrics) before each proposals()
+        # call so it can depend on samples seen so far this generation (e.g. partial_mode="beta").
+        # H(k) = k by default; override via PTPInference.compute_H.
+        self.H_fn = lambda metrics: torch.arange(21).double()
+        # If True, run the backbone forward pass (AR + completion) under torch.no_grad()
+        # to avoid retaining activations for backward — set when self.model is fully
+        # frozen (see PHeadLightningModule.freeze_base()); no effect otherwise.
+        self.freeze_backbone_forward: bool = False
+        # AR hidden state right before the current call's proposals, captured in generate()
+        # when self.model.output_hidden_states is set (see PTPInference partial_mode="phead").
+        self._last_context_hidden: torch.Tensor | None = None
+        # If True, forward()'s AR/context pass (ar_forward) applies LoRA everywhere too,
+        # not just the aux completion window -- self-speculative training, matching
+        # inference's _full_lora_mode variants. See PHeadLightningModule/CHeadLightningModule.
+        self.self_mode = self_mode
+        # If set, forward()'s correct_counts treats a completion token as correct when it
+        # falls within the model's own top-p nucleus at that position (not just exact
+        # argmax match) -- see compute_sequence_metrics.
+        self.nucleus_threshold: float | None = None
         self.temperature = temperature
         self.top_k = top_k
         self.top_p = top_p
@@ -296,37 +317,40 @@ class ParallelSamplingLightningModule(LightningModule):
         else:
             ar_block_mask = None  # standard causal
 
-        ar_outputs = None
-        if left_bin_edges is None or right_bin_edges is None:
-            left_bin_edges, right_bin_edges, ar_outputs = predict_bin_edges(
-                input_ids, input_mask=ar_block_mask,
-                model=self.model.ar_forward,
-                adapt_logits=self.adapt_logits if (self.temperature is not None or self.top_k is not None or self.top_p is not None) else None,
+        backbone_ctx = torch.no_grad() if self.freeze_backbone_forward else contextlib.nullcontext()
+        with backbone_ctx:
+            ar_outputs = None
+            if left_bin_edges is None or right_bin_edges is None:
+                left_bin_edges, right_bin_edges, ar_outputs = predict_bin_edges(
+                    input_ids, input_mask=ar_block_mask,
+                    model=lambda input_ids, attention_mask=None: self.model.ar_forward(
+                        input_ids, attention_mask, self_mode=self.self_mode),
+                    adapt_logits=self.adapt_logits if (self.temperature is not None or self.top_k is not None or self.top_p is not None) else None,
+                )
+                left_bin_edges = left_bin_edges.detach()
+                right_bin_edges = right_bin_edges.detach()
+            nested_batch = self.prepare_nested_batch(
+                input_ids, input_mask,
+                completion_length, completion_starts,
+                left_bin_edges, right_bin_edges,
+                eval,
+                doc_ids=doc_ids,
+                completion_doc_ids=completion_doc_ids,
+                doc_starts=doc_starts,
+                doc_lengths=doc_lengths,
             )
-            left_bin_edges = left_bin_edges.detach()
-            right_bin_edges = right_bin_edges.detach()
-        nested_batch = self.prepare_nested_batch(
-            input_ids, input_mask,
-            completion_length, completion_starts,
-            left_bin_edges, right_bin_edges,
-            eval,
-            doc_ids=doc_ids,
-            completion_doc_ids=completion_doc_ids,
-            doc_starts=doc_starts,
-            doc_lengths=doc_lengths,
-        )
-        attention_mask, auxiliaries, completion_ids, position_ids = nested_batch
+            attention_mask, auxiliaries, completion_ids, position_ids = nested_batch
 
-        batch_size = input_ids.shape[0]
-        num_completions = completion_starts.shape[1]
-        ar_outputs, completion_outputs = self.model(
-            input_ids=input_ids,
-            input_mask=input_mask,
-            ar_outputs=ar_outputs,
-            auxiliaries=auxiliaries.reshape(batch_size, -1),
-            auxiliary_position_ids=position_ids.reshape(batch_size, -1),
-            auxiliary_mask=attention_mask,
-        )
+            batch_size = input_ids.shape[0]
+            num_completions = completion_starts.shape[1]
+            ar_outputs, completion_outputs = self.model(
+                input_ids=input_ids,
+                input_mask=input_mask,
+                ar_outputs=ar_outputs,
+                auxiliaries=auxiliaries.reshape(batch_size, -1),
+                auxiliary_position_ids=position_ids.reshape(batch_size, -1),
+                auxiliary_mask=attention_mask,
+            )
 
         completion_logits = completion_outputs.logits
         loss_batch_size = batch_size * num_completions * completion_length
@@ -357,15 +381,26 @@ class ParallelSamplingLightningModule(LightningModule):
             completion_ids.reshape(*eval_base_shape),
             completion_logits.argmax(dim=-1),
             include_outputs=return_outputs,
+            student_logits=completion_logits if self.nucleus_threshold is not None else None,
+            nucleus_threshold=self.nucleus_threshold,
         )
 
         loss = 0.0
         if self.completion_loss_weight > 0.0:
             loss = loss + self.completion_loss_weight * completion_loss
+        extra = self._compute_extra_losses(ar_outputs, completion_starts, completion_length,
+                                            metrics, batch_size, num_completions)
+        loss = loss + extra.get('loss', 0.0)
+        metrics.update(extra.get('metrics', {}))
         metrics['loss'] = loss
         metrics['l_completion'] = completion_loss
         metrics['num_completions'] = num_completions
         return metrics
+
+    def _compute_extra_losses(self, ar_outputs, completion_starts, completion_length,
+                               metrics, batch_size, num_completions) -> dict:
+        """Hook for subclasses to add extra loss terms; see PHeadLightningModule."""
+        return {}
 
     def _make_completion_positions(self, completion_starts: Tensor, completion_length: int,
                                    seq_len: int, device) -> tuple[Tensor, Tensor, Tensor]:
@@ -491,9 +526,24 @@ class ParallelSamplingLightningModule(LightningModule):
         return auxiliaries
 
     @torch.no_grad()
-    def compute_sequence_metrics(self, completion_ids, student_predicted, include_outputs=False):
+    def compute_sequence_metrics(self, completion_ids, student_predicted, include_outputs=False,
+                                  student_logits=None, nucleus_threshold=None):
         mask = completion_ids != IGNORE_INDEX
-        identical = (completion_ids == student_predicted) & mask
+        match = completion_ids == student_predicted
+        if nucleus_threshold is not None:
+            # A completion token also counts as "correct" if it falls within the model's
+            # own top-p nucleus at that position, not just on exact argmax match -- mirrors
+            # inference's _in_nucleus (right_bin_edges/adapt_p convention: kept iff the
+            # cumulative mass of strictly-higher-ranked tokens is < threshold).
+            assert student_logits is not None, "student_logits required when nucleus_threshold is set"
+            probs = torch.softmax(student_logits.float(), dim=-1)
+            sorted_probs, sorted_idx = probs.sort(dim=-1, descending=True)
+            cum_before = sorted_probs.cumsum(dim=-1) - sorted_probs  # exclusive cumsum
+            in_nucleus_sorted = cum_before < nucleus_threshold
+            tok_match = sorted_idx == completion_ids.unsqueeze(-1)
+            in_nucleus = (in_nucleus_sorted & tok_match).any(-1)
+            match = match | in_nucleus
+        identical = match & mask
         count_per_length = (mask.long().sum(dim=0) + 1e-8)
         acc_per_position = identical.long().sum(dim=0) / count_per_length
         accuracy = identical.sum() / (mask.sum() + 1e-8)
@@ -507,9 +557,9 @@ class ParallelSamplingLightningModule(LightningModule):
         # Correct count before first error
         correct_counts = torch.where(
             # all tokens correct?
-            ((completion_ids == student_predicted) | ~mask).all(dim=1),
+            (match | ~mask).all(dim=1),
             mask.long().sum(1),
-            ((completion_ids == student_predicted) & mask).float().argmin(dim=1),
+            identical.float().argmin(dim=1),
         ).long()
         metrics["correct"] = correct_counts.float().mean()
         metrics["correct_counts"] = correct_counts
@@ -570,11 +620,14 @@ class ParallelSamplingLightningModule(LightningModule):
         )
         kv_teacher = outputs.past_key_values
         if not shared_kv_cache:
-            outputs = self.model.inference_forward(
+            # Route through the student_forward callback (if given) so subclasses that
+            # need consistent handling across the whole student-side KV cache (e.g. a
+            # merged-LoRA mode) see this initial fill too, not just later proposal calls.
+            student_prefill = student_forward if student_forward is not None else self.model.inference_forward
+            outputs = student_prefill(
                 input_ids=prompt_ids[:, :-1],
+                auxiliaries=None,
                 past_key_values=kv_student,
-                use_cache=True,
-                flag=True,
             )
             kv_student = outputs.past_key_values
         else:
@@ -600,7 +653,7 @@ class ParallelSamplingLightningModule(LightningModule):
                     past_key_values=kv_student,
                 )
 
-            kv_student.crop(kv_student.get_seq_length() - n_prop)
+            kv_student.crop(kv_student.get_seq_length() - n_prop - (1 if shared_kv_cache else 0))
             full_logits = outputs.logits
             # O-PTP
             student_logits = full_logits[:, -n_prop:]
@@ -686,6 +739,23 @@ class ParallelSamplingLightningModule(LightningModule):
 
         return mask, pos_ids
 
+    @staticmethod
+    def _in_nucleus(probs: torch.Tensor, tokens: torch.Tensor, threshold: float) -> torch.Tensor:
+        """
+        Standard top-p/nucleus membership test, mirroring adapt_p's rule: a token is
+        kept iff the cumulative probability mass of all *higher*-ranked tokens
+        (i.e. excluding itself) is strictly less than threshold.
+
+        probs  : [1, n, V] raw (unadapted) softmax probabilities at n positions
+        tokens : [1, n]    token ids to test membership for
+        Returns: [n] bool
+        """
+        sorted_probs, sorted_idx = probs.sort(dim=-1, descending=True)
+        cum_before = sorted_probs.cumsum(dim=-1) - sorted_probs  # exclusive cumsum
+        in_nucleus_sorted = cum_before < threshold
+        match = sorted_idx == tokens.unsqueeze(-1)
+        return (in_nucleus_sorted & match).any(-1)[0]
+
     @torch.inference_mode()
     def generate_seq_tree(self, prompt_ids, tree, z_rnd_all=None,
                      student_forward=None, teacher_forward=None, shared_kv_cache=False,
@@ -745,13 +815,29 @@ class ParallelSamplingLightningModule(LightningModule):
             use_cache=True
         )
         kv_teacher = outputs.past_key_values
+        if self.model.output_hidden_states:
+            # Context right before round 1's tree begins, same convention as generate()'s
+            # pos-1 capture (see PHeadLightningModule / choice-k's "phead" choice_mode).
+            self._last_context_hidden = outputs.hidden_states[-1][:, -1]
         if not shared_kv_cache:
-            outputs = self.model.inference_forward(
-                input_ids=prompt_ids[:, :-1],
-                past_key_values=kv_student,
-                use_cache=True,
-                flag=True,
-            )
+            # Route through the student_forward callback (if given), same reasoning
+            # as generate_seq: subclasses needing consistent student-side KV cache
+            # handling (e.g. a merged-LoRA mode) must see this initial fill too, not
+            # just later proposal calls. parent_list=None signals "no tree yet".
+            if student_forward is not None:
+                outputs = student_forward(
+                    input_ids=prompt_ids[:, :-1],
+                    auxiliaries=None,
+                    past_key_values=kv_student,
+                    parent_list=None,
+                )
+            else:
+                outputs = self.model.inference_forward(
+                    input_ids=prompt_ids[:, :-1],
+                    past_key_values=kv_student,
+                    use_cache=True,
+                    flag=True,
+                )
             kv_student = outputs.past_key_values
         else:
             kv_student = kv_teacher
@@ -785,7 +871,7 @@ class ParallelSamplingLightningModule(LightningModule):
                     parent_list=parent_list,
                 )
 
-            kv_student.crop(kv_student.get_seq_length() - n_nodes)
+            kv_student.crop(kv_student.get_seq_length() - n_nodes - (1 if shared_kv_cache else 0))
             full_logits = outputs.logits
             student_logits = full_logits[:, -n_nodes:]
             student_tokens = student_logits.argmax(dim=2)
@@ -821,6 +907,10 @@ class ParallelSamplingLightningModule(LightningModule):
                         use_cache=True,
                         parent_list=parent_list,
                     )
+                if self.model.output_hidden_states:
+                    # Context right before the NEXT round's tree begins -- read back by
+                    # that round's tree(n_prop) call, same lag as generate()'s H_fn.
+                    self._last_context_hidden = outputs.hidden_states[-1][:, T_ar - 1]
                 kv_teacher.crop(kv_teacher.get_seq_length() - n_nodes)
                 src_idx = torch.tensor(
                     [T_ar - 1 if p is None else T_ar + p for p in parent_list], device=device,
@@ -852,16 +942,27 @@ class ParallelSamplingLightningModule(LightningModule):
         return prompt_ids
 
 
-    def proposals(self, num_tokens=None, student_p=None, n_verify=None, double_at=100, metrics=None):
+    def proposals(self, H, num_tokens=None, student_p=None, n_verify=None, double_at=100, metrics=None,
+                  A: torch.Tensor | None = None):
         """
         Optimize proposals B wrt overhead adjusted expected # correct tokens
         max_B [sum_i A_i * H(B_i)] / [1 + sum_i B_i / 50)]
 
         If A_0 = 1 this becomes max_k H(k) / [1 + k / 50] = 14
+
+        H - reward matrix: estimated # correct tokens given k proposed tokens
+            (k = 0..20). See PTPInference.compute_H.
+        A - optional precomputed per-position acceptance-probability estimate,
+            overriding the hist_base/student_p derivation below. Lets a caller pass
+            confidences for an arbitrary set of positions (e.g. several independent
+            candidates' own tip confidences concatenated together) rather than just
+            one chain's per-depth fan -- same joint knapsack either way.
         """
         assert self.hist_base is not None, "hist_base must be provided to use proposals()"
         # Estimated probability of # correct tokens
-        if student_p is None:
+        if A is not None:
+            pass
+        elif student_p is None:
             A = self.hist_base
             if n_verify is not None:
                 A = torch.cat([A[:n_verify], torch.tensor([A[n_verify:].sum()])])
@@ -871,17 +972,6 @@ class ParallelSamplingLightningModule(LightningModule):
             A[1:] = torch.cumprod(student_p[0].cpu(), dim=-1)
             A[:-1] *= 1 - student_p[0].cpu()
         # Reward; Estimated # correct tokens in the next step given k proposed tokens
-        arange_21 = torch.arange(21)
-        H_hist = torch.cumsum(self.hist_base * arange_21, dim=-1)
-        # or: # proposed tokens
-        H_count = arange_21
-        # switch dynamically
-        # if metrics is not None and len(metrics['Nrel']) > 0:
-        #     rho = np.clip((np.array(metrics['Nrel']).mean() - 0.2) / 0.2, 0, 1)
-        # else:
-        #     rho = 0
-        rho = 0
-        H = (1 - rho) * H_hist + rho * H_count
         # A = A.clip(min=0.05)
 
         M = self.tokens_per_student_call
@@ -993,9 +1083,10 @@ class ParallelSamplingLightningModule(LightningModule):
         initial_prompt_len = prompt_ids.shape[1]  # ORACLE DEBUG — remove after testing
         z_rnd_all = torch.rand([prompt_ids.shape[0], max_new_tokens + tpsc + (num_proposed_tokens if fixed_tokens else 0)], device=dev, dtype=torch.float32)
         if fixed_tokens:
+            # 1st call is ignored anyway
             n_props = ((num_proposed_tokens // tpsc) * [tpsc] + [(num_proposed_tokens % tpsc)] + tpsc * [0])[:tpsc]
         else:
-            n_props = self.proposals(n_verify=0, num_tokens=num_proposed_tokens)
+            n_props = self.proposals(self.H_fn(metrics), n_verify=0, num_tokens=num_proposed_tokens)
         
         if eos is None:
             eos = getattr(self.model.tokenizer, 'eos_token_id', None)
@@ -1073,6 +1164,10 @@ class ParallelSamplingLightningModule(LightningModule):
                 past_key_values=kv_cache,
                 use_cache=True
             )
+            if self.model.output_hidden_states:
+                # Context right before this call's proposals begin — same position
+                # convention as training's completion_starts-1 (see PHeadLightningModule).
+                self._last_context_hidden = outputs.hidden_states[-1][:, pos - 1]
 
             kv_cache = outputs.past_key_values
             full_logits = outputs.logits
@@ -1114,7 +1209,7 @@ class ParallelSamplingLightningModule(LightningModule):
                         oracle_ref_ids[:, :ref_offset].to(dev),
                     ], dim=1)
                     # All proposals at depth 0: assume none of to-be-verified are correct
-                    n_props = self.proposals(n_verify=0, num_tokens=num_proposed_tokens, metrics=metrics)
+                    n_props = self.proposals(self.H_fn(metrics), n_verify=0, num_tokens=num_proposed_tokens, metrics=metrics)
                     n_props = [tpsc] + [0] * (len(n_props) - 1)
                     tokens_to_fill = tokens_to_verify  # n_verify = 0 → else branch fires
                     if eos in oracle_ref_ids[:, ref_offset - num_new : ref_offset]:
@@ -1145,7 +1240,7 @@ class ParallelSamplingLightningModule(LightningModule):
                     ], dim=1)
                     tokens_to_verify -= 1
                     tokens_to_fill = tokens_to_verify
-                    n_props = self.proposals(n_verify=0, num_tokens=num_proposed_tokens, metrics=metrics)
+                    n_props = self.proposals(self.H_fn(metrics), n_verify=0, num_tokens=num_proposed_tokens, metrics=metrics)
                     if callback is not None:
                         callback(prompt_ids[0], prompt_ids.shape[1])
                 else:
@@ -1156,7 +1251,7 @@ class ParallelSamplingLightningModule(LightningModule):
                     ], dim=1)
                     tokens_to_fill = tokens_to_verify - ths_student_predicted.shape[1]
                     tokens_to_verify -= 1
-                    n_props = self.proposals(student_p=ths_student_p[:, 1:], num_tokens=num_proposed_tokens, metrics=metrics)
+                    n_props = self.proposals(self.H_fn(metrics), student_p=ths_student_p[:, 1:], num_tokens=num_proposed_tokens, metrics=metrics)
                     if callback is not None:
                         callback(prompt_ids[0], prompt_ids.shape[1] - ths_student_predicted.shape[1] + 1)
                 metrics['correct'] += [num_new]
@@ -1244,3 +1339,252 @@ class ParallelSamplingLightningModule(LightningModule):
         if return_metrics:
             return prompt_ids, metrics
         return prompt_ids
+
+    @torch.inference_mode()
+    def generate_tree(self, batch, max_new_tokens, k: int, nucleus_threshold: float,
+                           return_metrics=False, eos=None, **kwargs):
+        """
+        Single-call choice-k PTP: maintains k independent candidate strands, all
+        verified AND re-proposed together in one masked forward call per round --
+        generalizes generate()'s own fused propose+verify design (a single call's
+        real rows verify last round's proposal while its aux/z rows simultaneously
+        propose the next one) from k=1 to k candidates, block-diagonal (no
+        cross-candidate attention).
+
+        Every round: verify the k current candidates as real embedded rows (each
+        candidate's own accepted-correct length determined via exact-match-OR-top-p-
+        nucleus against this call's own resampled target distribution, reusing the
+        exact z each candidate's tokens were originally proposed with -- see cand_z
+        below); simultaneously, at each candidate's own tip, propose a fresh k-wide
+        fan of new children (so whichever candidate wins already has its own k
+        next-round candidates ready, computed in this same call). The winner is the
+        candidate with the longest verified-accepted length (ties -> higher
+        confidence at the correction token, then lowest index).
+
+        Losing candidates' (and the winner's own speculative) cache entries are never
+        kept: kv_cache is cropped back to this round's starting frontier
+        unconditionally, and the winner's newly-confirmed tokens are re-embedded via
+        one small ordinary causal forward (same call shape as this method's own
+        prefill) to actually get cached -- avoids needing any new, non-contiguous
+        cache-repack machinery, at the cost of re-processing (not re-deciding) a
+        handful of already-confirmed tokens each round.
+
+        Total new fan tokens per round <= k * tokens_per_student_call: the per-tip
+        depth budget is jointly allocated across the k tips via proposals() (using
+        confidence A_i = candidate i's own cumulative acceptance probability so far)
+        under a shared depth budget of tokens_per_student_call, then each tip's
+        chosen depth is reused for k sibling children -- so total width is
+        (sum of per-tip depths <= tokens_per_student_call) * k siblings <= k * cap.
+
+        Self-verification (every row, real and fan alike, using merged-LoRA weights)
+        is the caller's responsibility via _full_lora_mode wrapping this whole call,
+        exactly as FullLoRAPTPInference wraps plain generate() for "ptp_self".
+        """
+        prompt_ids = batch['prompt_ids']
+        assert prompt_ids.shape[0] == 1, "Batch size must be 1"
+        assert self.model.inference_mode, "Call enter_inference_mode() before generate_tree()"
+        dev = prompt_ids.device
+        tpsc = self.tokens_per_student_call
+        metrics = {'correct': []}
+
+        if eos is None:
+            eos = getattr(self.model.tokenizer, 'eos_token_id', None)
+            if eos is None:
+                raise ValueError("eos token id must be provided either via model.tokenizer.eos_token_id or the eos argument")
+
+        kv_cache = DynamicCache()
+        outputs = self.model.inference_forward(
+            input_ids=prompt_ids[:, :-1], auxiliaries=None, past_key_values=kv_cache, use_cache=True,
+        )
+        kv_cache = outputs.past_key_values
+
+        # committed_ids always holds exactly 1 more token than kv_cache.get_seq_length()
+        # -- that extra trailing token is the uncached "bridge", mirroring generate()'s
+        # own convention (see its `kv_cache.crop(prompt_ids.shape[1] - 1)` prefill step).
+        committed_ids = prompt_ids
+        cand_ids: list[torch.Tensor] | None = None    # k tensors [1, len_i], not yet cached
+        cand_z: list[torch.Tensor] | None = None       # k tensors [len_i], z used to propose them
+        cand_p: list[torch.Tensor] | None = None       # k tensors [len_i], own top-1 student prob
+
+        tokens_generated = 0
+        while tokens_generated < max_new_tokens:
+            K = kv_cache.get_seq_length()
+            bridge = committed_ids[:, K:]
+            assert bridge.shape[1] == 1
+
+            if cand_ids is None:
+                lens = [0] * k
+                A = torch.ones(k, dtype=torch.float64)
+                real_ids = [torch.zeros(1, 0, dtype=torch.long, device=dev) for _ in range(k)]
+            else:
+                lens = [c.shape[1] for c in cand_ids]
+                # proposals()/H_fn operate on CPU tensors (matches proposals()'s own
+                # student_p[0].cpu() convention) -- move candidate confidences off GPU.
+                A = torch.stack([
+                    torch.cumprod(cand_p[i].cpu(), dim=-1)[-1].double() if lens[i] > 0
+                    else torch.tensor(1.0, dtype=torch.float64)
+                    for i in range(k)
+                ])
+                real_ids = cand_ids
+
+            n_real = sum(lens)
+            # Depth budget shared across the k tips (not multiplied by k here -- the k
+            # siblings-per-tip multiplication below is what brings total width up to
+            # k * tpsc, see docstring).
+            B = self.proposals(self.H_fn(metrics), num_tokens=tpsc, A=A)  # length k, each in [0, tpsc]
+            n_fan = k * sum(B)
+
+            input_ids = torch.cat([bridge] + real_ids, dim=1)
+            z_fan = torch.rand(1, n_fan, device=dev, dtype=torch.float32)
+
+            Q_real = 1 + n_real
+            Q_LEN = Q_real + n_fan
+            S = K + Q_LEN
+            mask = torch.full((1, 1, Q_LEN, S), float('-inf'), device=dev, dtype=torch.float32)
+            pos_ids = torch.zeros(1, Q_LEN, dtype=torch.long, device=dev)
+
+            # Bridge row (row 0): plain causal over the cache + itself.
+            mask[0, 0, 0, :K + 1] = 0.0
+            pos_ids[0, 0] = K
+
+            cand_start = []  # row index of candidate i's first real token
+            row = 1
+            for i in range(k):
+                cand_start.append(row)
+                for j in range(lens[i]):
+                    mask[0, 0, row, :K + 1] = 0.0                          # cache + bridge
+                    mask[0, 0, row, K + cand_start[i]:K + row + 1] = 0.0   # own earlier real + self
+                    pos_ids[0, row] = K + 1 + j
+                    row += 1
+            assert row == Q_real
+
+            fan_start = []  # row index of candidate i's k-wide fan block start
+            for i in range(k):
+                fan_start.append(row)
+                cand_real_lo = K + cand_start[i]
+                cand_real_hi = K + cand_start[i] + lens[i]
+                for c in range(k):
+                    chain_start = row
+                    for o in range(B[i]):
+                        mask[0, 0, row, :K + 1] = 0.0                        # cache + bridge
+                        mask[0, 0, row, cand_real_lo:cand_real_hi] = 0.0     # this tip's full real block
+                        mask[0, 0, row, K + chain_start:K + row + 1] = 0.0   # own earlier fan + self
+                        pos_ids[0, row] = K + 1 + lens[i] + o
+                        row += 1
+            assert row == Q_LEN
+
+            outputs = self.model.inference_forward(
+                input_ids=input_ids, auxiliaries=z_fan,
+                attention_mask=mask, position_ids=pos_ids,
+                past_key_values=kv_cache, use_cache=True,
+            )
+            kv_cache = outputs.past_key_values
+            kv_cache.crop(K)  # discard this round's additions unconditionally (see docstring)
+
+            full_logits = outputs.logits
+            fan_logits = full_logits[:, Q_real:]
+            full_p = torch.softmax(full_logits, dim=-1)
+            real_p = full_p[:, :Q_real]
+            fan_p = full_p[:, Q_real:]
+            tgt_p, tgt_indices = self.adapt_p(real_p)
+
+            # --- Verify: resample the target at each real row, reusing the SAME z
+            # each candidate's own tokens were originally proposed with (bridge gets
+            # a fresh z -- its "correct" continuation isn't checked against anything). ---
+            right_bin_edges = tgt_p.cumsum(dim=-1)
+            right_bin_edges[..., -1] = 1
+            z_bridge = torch.rand(1, 1, device=dev, dtype=torch.float32)
+            z_real = torch.cat([z_bridge] + [
+                (cand_z[i][None] if cand_z is not None and lens[i] > 0 else torch.zeros(1, 0, device=dev))
+                for i in range(k)
+            ], dim=1)
+            bin_idx = (right_bin_edges > z_real[..., None]).max(dim=-1).indices
+            correct_tokens = tgt_indices.gather(-1, bin_idx.unsqueeze(-1)).squeeze(-1)  # [1, Q_real]
+
+            best_i, best_key, best_num_correct = -1, None, 0
+            for i in range(k):
+                if lens[i] == 0:
+                    num_correct = 0
+                else:
+                    predict = real_ids[i]
+                    check_target = torch.cat([
+                        correct_tokens[:, 0:1],
+                        correct_tokens[:, cand_start[i]:cand_start[i] + lens[i] - 1],
+                    ], dim=1)
+                    probs_i = torch.cat([
+                        real_p[:, 0:1],
+                        real_p[:, cand_start[i]:cand_start[i] + lens[i] - 1],
+                    ], dim=1)
+                    exact = (predict == check_target)[0]
+                    nucleus = self._in_nucleus(probs_i, predict, nucleus_threshold)
+                    match = exact | nucleus
+                    num_correct = lens[i] if bool(match.all()) else int(match.float().argmin().item())
+                total_len = num_correct + 1
+                correction_idx = 0 if num_correct == 0 else cand_start[i] + num_correct - 1
+                confidence = float(tgt_p[0, correction_idx].max())
+                key = (total_len, confidence)
+                if best_key is None or key > best_key:
+                    best_i, best_key, best_num_correct = i, key, num_correct
+
+            correction_idx = 0 if best_num_correct == 0 else cand_start[best_i] + best_num_correct - 1
+            correction_token = correct_tokens[:, correction_idx:correction_idx + 1]
+            winner_tokens = torch.cat([real_ids[best_i][:, :best_num_correct], correction_token], dim=1)
+            n_new = winner_tokens.shape[1]
+
+            committed_ids = torch.cat([committed_ids[:, :K + 1], winner_tokens], dim=1)
+            metrics['correct'].append(n_new)
+            tokens_generated += n_new
+
+            # Commit the bridge + winner's confirmed tokens into the cache via one
+            # small ordinary causal forward (same shape as this method's own prefill
+            # above) -- holds back the last token uncached, restoring the "committed_ids
+            # is exactly 1 longer than kv_cache" invariant for the next round.
+            commit_input = torch.cat([bridge, winner_tokens], dim=1)[:, :-1]
+            commit_out = self.model.inference_forward(
+                input_ids=commit_input, auxiliaries=None, past_key_values=kv_cache, use_cache=True,
+            )
+            kv_cache = commit_out.past_key_values
+
+            if eos in winner_tokens[0].tolist():
+                break
+
+            # Next round's k candidates: the winner's own precomputed tip-fan is only
+            # valid if the winner was FULLY accepted (its fan's mask assumed the whole
+            # real block was context -- a mismatch invalidates that conditioning, so
+            # fall back to a fresh bootstrap-style round, same as round 1).
+            if best_num_correct == lens[best_i]:
+                lo = fan_start[best_i]
+                depth = B[best_i]
+                cand_ids, cand_z, cand_p = [], [], []
+                for c in range(k):
+                    chain_lo = lo + c * depth
+                    chain_hi = chain_lo + depth
+                    if depth == 0:
+                        cand_ids.append(torch.zeros(1, 0, dtype=torch.long, device=dev))
+                        cand_z.append(torch.zeros(0, device=dev))
+                        cand_p.append(torch.zeros(0, device=dev))
+                        continue
+                    logits_c = fan_logits[:, chain_lo:chain_hi]
+                    probs_c = fan_p[:, chain_lo:chain_hi]
+                    tok_c = logits_c.argmax(dim=-1)
+                    p_c = probs_c.gather(-1, tok_c[..., None])[..., 0]
+                    cand_ids.append(tok_c)
+                    cand_z.append(z_fan[0, chain_lo:chain_hi])
+                    cand_p.append(p_c[0])
+            else:
+                cand_ids = None
+                cand_z = None
+                cand_p = None
+
+        if committed_ids.shape[1] > prompt_ids.shape[1] + max_new_tokens:
+            committed_ids = committed_ids[:, :prompt_ids.shape[1] + max_new_tokens]
+
+        metrics = {
+            'completion': committed_ids,
+            'correct_per_call': np.mean(metrics['correct']),
+            'correct_all': metrics['correct'],
+            'num_calls': len(metrics['correct']),
+        }
+        if return_metrics:
+            return committed_ids, metrics
+        return committed_ids

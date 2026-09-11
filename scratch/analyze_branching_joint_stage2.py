@@ -9,20 +9,27 @@ shrinkage-mix) against each dataset's own observed histogram.
 """
 import json
 import re
+import sys
 import numpy as np
 from scipy import stats, special, optimize
 
+# Usage: analyze_branching_joint_stage2.py [PREFIX]
+# PREFIX must match the value passed to analyze_branching_joint_per_question.py (stage 1)
+# for the same checkpoint/variant, e.g. "vicuna_old_" or "vicuna_old_topp0.8_self_";
+# defaults to "" (original vicuna files, unprefixed).
+_PREFIX = sys.argv[1] if len(sys.argv) > 1 else ""
+
 DATASETS = [
-    dict(name="seqptp", K=1, capT=20, G_path="scratch/choice1_percall_full.json",
-         log_path="scratch/collect_choice1.log", calls_key="n_calls"),
-    dict(name="choice2", K=2, capT=19, G_path="scratch/choice2_percall_full.json",
-         log_path="scratch/collect_choice2.log", calls_key="n_calls"),
-    dict(name="choice5", K=5, capT=19, G_path="scratch/choice5_percall_full.json",
-         log_path="scratch/collect_choice5.log", calls_key="n_calls"),
-    dict(name="choice50", K=50, capT=19, G_path="scratch/choice50_percall_full.json",
-         log_path="scratch/collect_choice50.log", calls_key="n_calls"),
-    dict(name="seqn1000", K=1000, capT=19, G_path="scratch/seqn_choice1000_percall_full.json",
-         log_path="scratch/collect_seqn1000_full.log", calls_key="n_rounds"),
+    dict(name="seqptp", K=1, capT=20, G_path=f"scratch/{_PREFIX}choice1_percall_full.json",
+         log_path=f"scratch/collect_{_PREFIX}choice1.log", calls_key="n_calls"),
+    dict(name="choice2", K=2, capT=19, G_path=f"scratch/{_PREFIX}choice2_percall_full.json",
+         log_path=f"scratch/collect_{_PREFIX}choice2.log", calls_key="n_calls"),
+    dict(name="choice5", K=5, capT=19, G_path=f"scratch/{_PREFIX}choice5_percall_full.json",
+         log_path=f"scratch/collect_{_PREFIX}choice5.log", calls_key="n_calls"),
+    dict(name="choice50", K=50, capT=19, G_path=f"scratch/{_PREFIX}choice50_percall_full.json",
+         log_path=f"scratch/collect_{_PREFIX}choice50.log", calls_key="n_calls"),
+    dict(name="seqn1000", K=1000, capT=19, G_path=f"scratch/{_PREFIX}seqn_choice1000_percall_full.json",
+         log_path=f"scratch/collect_{_PREFIX}seqn1000_full.log", calls_key="n_rounds"),
 ]
 FLOOR = 2
 MAX_I = 20
@@ -100,11 +107,14 @@ def r2(obs, pred):
     return 1 - ss_res / ss_tot
 
 
-fit = json.load(open("scratch/joint_per_question_pi0_rho.json"))
+fit = json.load(open(f"scratch/{_PREFIX}joint_per_question_pi0_rho.json"))
 pi0_star, rho_star = fit["pi0"], fit["rho"]
 print(f"Using joint fit: pi0*={pi0_star:.4f} rho*={rho_star:.4f}\n")
 
-panel = json.load(open("scratch/panel_data_5way.json"))
+# panel_data_5way.json is the original vicuna-only comparison panel (r2_existing below is
+# just an informational cross-check against that older fit) -- skip it for any other
+# checkpoint/variant prefix rather than compare against numbers from a different model.
+panel = json.load(open("scratch/panel_data_5way.json")) if not _PREFIX else None
 panel_key = {"seqptp": "seqptp", "choice2": "choice2", "choice5": "choice5",
              "choice50": "choice50", "seqn1000": "seqn1000"}
 
@@ -183,7 +193,7 @@ for ds in DATASETS:
 
     r2_pooled, r2_bg = r2(obs_hist, pred_pooled), r2(obs_hist, pred_bg)
     r2_raw, r2_bayes = r2(obs_hist, pred_mix_raw), r2(obs_hist, pred_mix_bayes)
-    r2_existing = panel["datasets"][panel_key[name]]["jointM_r2"]
+    r2_existing = panel["datasets"][panel_key[name]]["jointM_r2"] if panel is not None else None
 
     print(f"=== {name} (K={K}) ===")
     print(f"  pooled p={p_pooled:.4f}   free p_i: mean={p_hat_i.mean():.4f} std={p_hat_i.std():.4f}")
@@ -191,8 +201,9 @@ for ds in DATASETS:
     print(f"  Beta(a={a_hat:.2f},b={b_hat:.2f}) mean={beta_mean:.4f} std={beta_std:.4f}   "
           f"AIC delta(pooled-beta)={aic_pooled-aic_bg:.1f}  LRT p={p_value_bg:.2e}")
     print(f"  shrinkage p_i_bayes: mean={p_i_bayes.mean():.4f} std={p_i_bayes.std():.4f}")
+    existing_str = f"{r2_existing:.5f}" if r2_existing is not None else "n/a"
     print(f"  R^2  pooled={r2_pooled:.5f}  Beta-marginal={r2_bg:.5f}  raw-mix={r2_raw:.5f}  "
-          f"shrink-mix={r2_bayes:.5f}   (old pooled-joint-fit R^2={r2_existing:.5f})")
+          f"shrink-mix={r2_bayes:.5f}   (old pooled-joint-fit R^2={existing_str})")
     print()
 
     results[name] = dict(p_pooled=p_pooled, p_hat_i=p_hat_i.tolist(), p_i_bayes=p_i_bayes.tolist(),
@@ -200,6 +211,7 @@ for ds in DATASETS:
                           r2_pooled=r2_pooled, r2_bg=r2_bg, r2_raw=r2_raw, r2_bayes=r2_bayes,
                           r2_existing=r2_existing, lrt_stat=lrt_stat, p_value=p_value)
 
-with open("scratch/joint_per_question_results.json", "w") as f:
+out_path = f"scratch/{_PREFIX}joint_per_question_results.json"
+with open(out_path, "w") as f:
     json.dump(results, f, indent=2)
-print("saved detailed results to scratch/joint_per_question_results.json")
+print(f"saved detailed results to {out_path}")

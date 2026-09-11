@@ -1,0 +1,19 @@
+{\setlength{\tabcolsep}{4pt}%
+\begin{tabular}{llrrrrr}
+\toprule
+verification & allocation & \multicolumn{1}{c}{$K$} & \multicolumn{1}{c}{tok./call} & \multicolumn{1}{c}{ms/tok.} & \multicolumn{1}{c}{speedup} & \multicolumn{1}{c}{$\bar q$ (\%)} \\
+\midrule
+verified against the base model, $\theta=0.98$ & uniform & 5 & 4.32 & 57.4 & 0.98$\times$ & 82.92 \\
+ & Bayes, conjugate & 5 & 4.46 & 55.9 & 1.01$\times$ & 83.52 \\
+ & Bayes, grid & 5 & 4.38 & 48.2 & 1.17$\times$ & 82.46 \\
+ & uniform & 50 & 4.74 & 140.4 & 0.40$\times$ & 82.97 \\
+ & Bayes, conjugate & 50 & 4.77 & 159.8 & 0.35$\times$ & 82.02 \\
+ & Bayes, grid & 50 & 4.60 & 182.1 & 0.31$\times$ & 81.88 \\
+\midrule
+self-verified, $\theta=0.8$ & uniform & 50 & 5.98 & 111.1 & 0.51$\times$ & 73.74 \\
+ & Bayes, conjugate & 50 & 6.03 & 179.0 & 0.32$\times$ & 76.04 \\
+ & Bayes, grid & 50 & 5.77 & 201.8 & 0.28$\times$ & 74.29 \\
+ & learned $p$-head & 50 & 3.45 & 325.4 & 0.17$\times$ & 74.48 \\
+\bottomrule
+\end{tabular}
+}

@@ -1,0 +1,32 @@
+% Paper-specific notation. Loaded after math_commands.tex; all names are
+% prefixed or distinctive so nothing in the dlbook notation is redefined.
+
+% --- proposal / verification counts -----------------------------------------
+\newcommand{\nprop}{N_{\mathrm{prop}}}       % proposed tokens per model call
+\newcommand{\ncorrect}{N_{\mathrm{cor}}}     % longest correct prefix
+\newcommand{\naccepted}{N_{\mathrm{acc}}}    % committed tokens = Ncor + 1
+\newcommand{\budget}{C}                      % node budget per call
+
+% --- sampling ----------------------------------------------------------------
+\newcommand{\Pick}{\operatorname{Pick}}
+\newcommand{\aux}{u}                         % auxiliary variable u ~ U[0,1]
+\newcommand{\auxs}{\mathbf{u}}
+\newcommand{\base}{Q_\phi}                   % base / reference AR model
+\newcommand{\prop}{P_\theta}                 % proposal (PTP) model
+\newcommand{\accept}{\mathcal{A}}            % acceptance set
+
+% --- branching model ---------------------------------------------------------
+\newcommand{\pizero}{\pi_0}                  % zero-inflation probability
+\newcommand{\rhoc}{\rho}                     % intra-generation correlation
+\newcommand{\frail}{\Theta}                  % per-generation frailty
+\newcommand{\Sfun}{S}                        % survival table S[w,d]
+\newcommand{\alive}{S}                       % strands alive
+\newcommand{\extinct}{T}                     % extinction time
+\newcommand{\width}{W}                       % width profile W(d)
+\newcommand{\capt}{d_{\max}}                 % structural proposal-length cap
+\newcommand{\BetaBin}{\mathrm{BetaBin}}
+
+% --- misc --------------------------------------------------------------------
+\newcommand{\ie}{i.e.\@\xspace}
+\newcommand{\eg}{e.g.\@\xspace}
+\newcommand{\todo}[1]{\textcolor{red}{[#1]}}

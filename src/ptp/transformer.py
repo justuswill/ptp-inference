@@ -12,6 +12,43 @@ from ptp.patch_norms import patch_llama_network
 from ptp import auxiliary_embed
 
 
+# flex_attention's default triton block sizes need ~101KB of shared memory per block,
+# marginally more than Ada-class cards expose (rtx6000: 101376 B opt-in), so the kernel
+# autotuner aborts with "No valid triton configs. OutOfMemoryError: out of resource:
+# triton_tem_fused_flex_attention". Halving the blocks fits, at a modest throughput cost.
+# A100/H100 have enough shared memory and are left on the faster defaults.
+_FLEX_SMALL_BLOCKS = {"BLOCK_M": 64, "BLOCK_N": 64,
+                      "BLOCK_M1": 32, "BLOCK_N1": 64,
+                      "BLOCK_M2": 64, "BLOCK_N2": 32}
+
+
+def limit_flex_attention_blocks(min_shared_memory: int = 128 * 1024) -> bool:
+    """Shrink flex_attention's triton blocks on GPUs with too little shared memory.
+
+    Returns True if the smaller blocks were installed. Idempotent.
+    """
+    if not torch.cuda.is_available():
+        return False
+    if torch.cuda.get_device_properties(0).shared_memory_per_block_optin >= min_shared_memory:
+        return False
+
+    from transformers.modeling_utils import ALL_ATTENTION_FUNCTIONS
+    import transformers.integrations.flex_attention as flex
+
+    original = flex.flex_attention_forward
+    if getattr(original, "_ptp_small_blocks", False):
+        return True
+
+    def flex_attention_forward(*args, **kwargs):
+        kwargs.setdefault("kernel_options", _FLEX_SMALL_BLOCKS)
+        return original(*args, **kwargs)
+
+    flex_attention_forward._ptp_small_blocks = True
+    flex.flex_attention_forward = flex_attention_forward
+    ALL_ATTENTION_FUNCTIONS["flex_attention"] = flex_attention_forward
+    return True
+
+
 class CustomCheckpointWrapper(nn.Module):
     def __init__(self, layer, use_reentrant: bool = False, preserve_rng_state: bool = True):
         super().__init__()
@@ -137,6 +174,9 @@ class TransformerModel(torch.nn.Module):
         if isinstance(dtype, str):
             dtype = getattr(torch, dtype)
 
+        if attn_implementation == "flex_attention" and limit_flex_attention_blocks():
+            print("Reduced flex_attention triton block sizes for this GPU's shared memory")
+
         if isinstance(model_id, torch.nn.Module):
             self.tokenizer = None
             self.model = model_id
@@ -261,6 +301,8 @@ class MixedTransformerModel(TransformerModel):
             adapter_kwargs = {}
         self.u_embed = adapter_class(self.model.config.hidden_size, **adapter_kwargs)
         self.shift_positions = shift_positions
+        # If True, ar_forward requests hidden states (e.g. for PHeadLightningModule).
+        self.output_hidden_states = False
 
     def _get_padding_token_id(self) -> int:
         """Get the padding token ID from tokenizer, fallback to eos_token_id if not available."""
@@ -287,16 +329,21 @@ class MixedTransformerModel(TransformerModel):
         input_ids[input_ids == IGNORE_INDEX] = padding_token_id
         return input_ids
 
-    def ar_forward(self, input_ids, attention_mask=None) -> Any:
+    def ar_forward(self, input_ids, attention_mask=None, self_mode: bool = False) -> Any:
         # Replace IGNORE_INDEX tokens with padding token before passing to model
         input_ids = self._replace_ignore_index(input_ids)
-        
-        with self.enable_adapters(enabled=False):
+
+        # self_mode=True applies LoRA to this context/backlog pass too (not just the aux
+        # completion window) -- the training-time analog of inference's _full_lora_mode /
+        # "self-speculative" variants, which verify against the model's own LoRA-adapted
+        # prediction instead of a plain base-model pass.
+        with self.enable_adapters(enabled=self_mode):
             teacher_outputs = self.model(
                 input_ids=input_ids,
                 attention_mask=attention_mask,
                 use_cache=True,
-                auxiliaries=None
+                auxiliaries=None,
+                output_hidden_states=self.output_hidden_states,
             )
         return teacher_outputs
 
@@ -373,4 +420,5 @@ class MixedTransformerModel(TransformerModel):
             position_ids=position_ids,
             past_key_values=past_key_values,
             use_cache=use_cache,
+            output_hidden_states=self.output_hidden_states,
         )

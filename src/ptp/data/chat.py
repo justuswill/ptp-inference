@@ -315,6 +315,10 @@ class FullChatDataset(ChatDataset):
         item = self.data[index]
         conversation_keys = self._resolve_conversation_keys()
         conversation = self._convert_to_chat_format(item[conversation_keys])
+        if not conversation:
+            # Malformed source conversation (e.g. all-system or empty); apply_chat_template([])
+            # crashes, and get_metadata() already treats this as a spanless doc — see there.
+            return torch.tensor([], dtype=torch.long)
         full_text = self.tokenizer.apply_chat_template(
             conversation, tokenize=False, add_generation_prompt=False
         )
@@ -359,12 +363,24 @@ class FullChatDataset(ChatDataset):
                     batch_char_spans = []
                     for item in data_iter:
                         conv = self._convert_to_chat_format(item[conversation_key])
+                        if not conv:
+                            # Malformed source conversation (e.g. all-system or empty);
+                            # apply_chat_template([]) crashes, so treat as a spanless doc.
+                            batch_texts.append("")
+                            batch_char_spans.append([])
+                            if len(batch_texts) == BATCH_SIZE:
+                                break
+                            continue
                         batch_texts.append(self.tokenizer.apply_chat_template(
                             conv, tokenize=False, add_generation_prompt=False
                         ))
                         char_spans = []
                         for i, turn in enumerate(conv):
                             if turn['role'] != 'assistant':
+                                continue
+                            if i == 0:
+                                # No preceding turn to condition on (e.g. malformed source
+                                # conversation starting with an assistant message); skip.
                                 continue
                             prefix = self.tokenizer.apply_chat_template(
                                 conv[:i], tokenize=False, add_generation_prompt=True

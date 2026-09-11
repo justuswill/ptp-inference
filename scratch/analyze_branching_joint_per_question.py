@@ -24,17 +24,23 @@ import sys
 import numpy as np
 from scipy import stats, special, optimize
 
+# Usage: analyze_branching_joint_per_question.py [PI0] [RHO] [PREFIX]
+# PREFIX selects scratch/{PREFIX}choice{k}_percall_full.json etc (e.g. "vicuna_old_"),
+# matching collect_choicek_hist.py's output naming for that checkpoint; defaults to ""
+# (original vicuna files, unprefixed).
+_PREFIX = sys.argv[3] if len(sys.argv) > 3 else ""
+
 DATASETS = [
-    dict(name="seqptp", K=1, capT=20, G_path="scratch/choice1_percall_full.json",
-         log_path="scratch/collect_choice1.log", calls_key="n_calls"),
-    dict(name="choice2", K=2, capT=19, G_path="scratch/choice2_percall_full.json",
-         log_path="scratch/collect_choice2.log", calls_key="n_calls"),
-    dict(name="choice5", K=5, capT=19, G_path="scratch/choice5_percall_full.json",
-         log_path="scratch/collect_choice5.log", calls_key="n_calls"),
-    dict(name="choice50", K=50, capT=19, G_path="scratch/choice50_percall_full.json",
-         log_path="scratch/collect_choice50.log", calls_key="n_calls"),
-    dict(name="seqn1000", K=1000, capT=19, G_path="scratch/seqn_choice1000_percall_full.json",
-         log_path="scratch/collect_seqn1000_full.log", calls_key="n_rounds"),
+    dict(name="seqptp", K=1, capT=20, G_path=f"scratch/{_PREFIX}choice1_percall_full.json",
+         log_path=f"scratch/collect_{_PREFIX}choice1.log", calls_key="n_calls"),
+    dict(name="choice2", K=2, capT=19, G_path=f"scratch/{_PREFIX}choice2_percall_full.json",
+         log_path=f"scratch/collect_{_PREFIX}choice2.log", calls_key="n_calls"),
+    dict(name="choice5", K=5, capT=19, G_path=f"scratch/{_PREFIX}choice5_percall_full.json",
+         log_path=f"scratch/collect_{_PREFIX}choice5.log", calls_key="n_calls"),
+    dict(name="choice50", K=50, capT=19, G_path=f"scratch/{_PREFIX}choice50_percall_full.json",
+         log_path=f"scratch/collect_{_PREFIX}choice50.log", calls_key="n_calls"),
+    dict(name="seqn1000", K=1000, capT=19, G_path=f"scratch/{_PREFIX}seqn_choice1000_percall_full.json",
+         log_path=f"scratch/collect_{_PREFIX}seqn1000_full.log", calls_key="n_rounds"),
 ]
 FLOOR = 2
 MAX_I = 20  # covers capT=20 (seqptp) and capT=19 (rest)
@@ -151,6 +157,7 @@ rho_star = 1 / (1 + np.exp(-res.x[1]))
 print(f"\nConverged: pi0*={pi0_star:.4f} rho*={rho_star:.4f}  (prior pooled joint fit was pi0=0.062, rho=0.858)")
 print(f"profile NLL={res.fun:.1f}  nfev={res.nfev}", flush=True)
 
-with open("scratch/joint_per_question_pi0_rho.json", "w") as f:
+out_path = f"scratch/{_PREFIX}joint_per_question_pi0_rho.json"
+with open(out_path, "w") as f:
     json.dump(dict(pi0=pi0_star, rho=rho_star, nll=res.fun, nfev=res.nfev), f)
-print("saved pi0*/rho* to scratch/joint_per_question_pi0_rho.json")
+print(f"saved pi0*/rho* to {out_path}")

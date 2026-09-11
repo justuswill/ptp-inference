@@ -1,0 +1,14 @@
+{
+ "checkpoint": "/extra/ucibdl1/jcwill/ptp/checkpoints/vicuna_old",
+ "inference_dir": "/extra/ucibdl1/jcwill/ptp/checkpoints/vicuna_old/inference",
+ "scratch_prefix": "vicuna_old_",
+ "percall_sources": {
+  "1": "scratch/vicuna_old_choice1_percall_full.json",
+  "2": "scratch/vicuna_old_choice2_percall_full.json",
+  "5": "scratch/vicuna_old_choice5_percall_full.json",
+  "50": "scratch/vicuna_old_choice50_percall_full.json",
+  "1000": "scratch/vicuna_old_seqn_choice1000_percall_full.json"
+ },
+ "collected_utc": "2026-09-11T14:04:14+00:00",
+ "note": "Preliminary single-seed runs on 100 Spec-Bench first turns."
+}
