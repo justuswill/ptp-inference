@@ -50,7 +50,7 @@ Multi-token prediction provides substantial inference speedups by emitting sever
 % Intro approach
 We study this decoding layer directly, treating the multi-token model as a black-box proposal mechanism and identify design choices that best trade throughput against generation quality or alignment to an underlying autoregressive (AR) reference.
 % Main point / insight
-Together, our improvements yield up to 10 tokens per call across a wide range of applications on several pretrained models, a 200\% increase over recent methods, unlocking the full high-throughput potential of inference.
+Together, our improvements yield up to 10 tokens per call across a wide range of applications on several pretrained models, a 200\% increase over recent methods, unlocking the full low-latency potential of inference on these models.
 \end{abstract}
 
 \section{Introduction}
@@ -60,7 +60,7 @@ Together, our improvements yield up to 10 tokens per call across a wide range of
     \item many methods to speed up including small draft models. MTP/PTP improves up to 3x.
     \item design choices have been
     \item focused on exactly replicating teacher
-    \item: now a trade-off (example p-threshold)
+    \item if not now a trade-off (example p-threshold)
     \item proposal of parallizaton (apple, PTP)
 \end{itemize}
 
