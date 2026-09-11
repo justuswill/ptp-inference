@@ -21,8 +21,7 @@
 
 \graphicspath{{fig/}{fig/slides/}}
 
-\title{Elucidating Inference in Multi-Token Prediction:\\
-Proposal, Verification, and Parallelization}
+\title{Elucidating Inference in \\ Multi-Token Prediction}
 
 % Authors must not appear in the submitted version. They should be hidden
 % as long as the \iclrfinalcopy macro remains commented out below.
@@ -44,27 +43,26 @@ Irvine, CA 92697, USA
 \maketitle
 
 \begin{abstract}
-Multi-token prediction promises substantial inference speedups by emitting
-several tokens per forward pass, but the quality of the resulting text depends
-critically on how those tokens are accepted, rejected, or resampled. We study
-this decoding layer directly, treating the multi-token model as a proposal
-mechanism and asking what acceptance rule best trades throughput against
-generation quality and alignment to an underlying autoregressive (AR) reference.
-We organize the design space along three axes --- how proposals are
-\emph{verified}, how many and how long the proposals are, and how proposal and
-verification are \emph{parallelized} --- and we give a generative model of the
-number of correct tokens per call that turns the second axis into an exactly
-solvable allocation problem. Our experiments are conducted in PTP, a recent
-multi-token inference framework, but the acceptance rules and the evaluation
-protocol are framework-agnostic and apply to any model producing multiple tokens
-per call. We report accepted-tokens-per-call, wall-clock speedup, and downstream
-task quality across $62$ decoding configurations on Spec-Bench, and find that the
-three measures induce three different orderings: committing more tokens per call
-is neither sufficient for lower latency nor compatible with staying faithful to
-the reference.
+% Intro setting + emphasize impact
+Accelerating generation is a key challenge in deployment of modern LLMs.
+% Intro problem
+Multi-token prediction provides substantial inference speedups by emitting several tokens per forward pass, but the quality of the resulting text depends critically on how those tokens are accepted, rejected, or resampled.
+% Intro approach
+We study this decoding layer directly, treating the multi-token model as a black-box proposal mechanism and identify design choices that best trade throughput against generation quality or alignment to an underlying autoregressive (AR) reference.
+% Main point / insight
+Together, our improvements yield up to 10 tokens per call across a wide range of applications on several pretrained models, a 200\% increase over recent methods, unlocking the full high-throughput potential of inference.
 \end{abstract}
 
 \section{Introduction}
+
+\begin{itemize}
+    \item AR LLM are the base of modern inference
+    \item many methods to speed up including small draft models. MTP/PTP improves up to 3x.
+    \item design choices have been
+    \item focused on exactly replicating teacher
+    \item: now a trade-off (example p-threshold)
+    \item proposal of parallizaton (apple, PTP)
+\end{itemize}
 
 Autoregressive decoding emits one token per forward pass. A multi-token model
 breaks that constraint by proposing several tokens at once, but a proposal is not
