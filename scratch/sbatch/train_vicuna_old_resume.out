@@ -3,7 +3,6 @@ Using bfloat16 Automatic Mixed Precision (AMP)
 GPU available: True (cuda), used: True
 TPU available: False, using: 0 TPU cores
 💡 Tip: For seamless cloud logging and experiment tracking, try installing [litlogger](https://pypi.org/project/litlogger/) to enable LitLogger, which logs metrics and artifacts automatically to the Lightning Experiments platform.
-restore_ckpt: /extra/ucibdl1/jcwill/ptp/checkpoints/vicuna_old/last-old.ckpt
 training:
   n_epochs: 100000
   precision: bf16-mixed
@@ -42,20 +41,20 @@ num nodes: 1
 ==================================================
 Saving checkpoints to /extra/ucibdl1/jcwill/ptp/checkpoints/vicuna_old
 Reduced flex_attention triton block sizes for this GPU's shared memory
-Loading weights:   0%|          | 0/291 [00:00<?, ?it/s]Loading weights: 100%|██████████| 291/291 [00:00<00:00, 43393.98it/s]
+Loading weights:   0%|          | 0/291 [00:00<?, ?it/s]Loading weights: 100%|██████████| 291/291 [00:00<00:00, 54379.26it/s]
 The following generation flags are not valid and may be ignored: ['temperature', 'top_p']. Set `TRANSFORMERS_VERBOSITY=info` for more details.
 wandb: WARNING The anonymous setting has no effect and will be removed in a future version.
 wandb: [wandb.login()] Loaded credentials for https://api.wandb.ai from /home/jcwill/.netrc.
 wandb: Currently logged in as: jukamala to https://api.wandb.ai. Use `wandb login --relogin` to force relogin
+wandb: setting up run vicuna_old
 wandb: Tracking run with wandb version 0.27.0
-wandb: Run data is saved locally in wandb/run-20260908_061426-vicuna_old
+wandb: Run data is saved locally in wandb/run-20260912_015657-vicuna_old
 wandb: Run `wandb offline` to turn off syncing.
 wandb: Resuming run vicuna_old
 wandb: ⭐️ View project at https://wandb.ai/jukamala/ptp-distill
 wandb: 🚀 View run at https://wandb.ai/jukamala/ptp-distill/runs/vicuna_old
 /home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/lightning/pytorch/callbacks/model_checkpoint.py:881: Checkpoint directory /extra/ucibdl1/jcwill/ptp/checkpoints/vicuna_old exists and is not empty.
-Restoring states from the checkpoint path at /extra/ucibdl1/jcwill/ptp/checkpoints/vicuna_old/last-old.ckpt
-/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/lightning/pytorch/callbacks/model_checkpoint.py:566: The dirpath has changed from '/tmp/fdraxler-llm/light-speed-llm-new/checkpoints/vicuna-7b-ultrachat-lora-r128' to '/extra/ucibdl1/jcwill/ptp/checkpoints/vicuna_old', therefore `best_model_score`, `kth_best_model_path`, `kth_value`, `last_model_path` and `best_k_models` won't be reloaded. Only `best_model_path` will be reloaded.
+Restoring states from the checkpoint path at /extra/ucibdl1/jcwill/ptp/checkpoints/vicuna_old/last.ckpt
 LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
 /home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/lightning/pytorch/utilities/model_summary/model_summary.py:242: Precision bf16-mixed is not supported by the model summary.  Estimated model size in MB will not be accurate. Using 32 bits instead.
 Applying LoRA adapters
@@ -72,110 +71,7 @@ Total estimated model params size (MB): 28.2 K
 Modules in train mode: 2668                                                     
 Modules in eval mode: 0                                                         
 Total FLOPs: 0                                                                  
-Restored all states from the checkpoint at /extra/ucibdl1/jcwill/ptp/checkpoints/vicuna_old/last-old.ckpt
+Restored all states from the checkpoint at /extra/ucibdl1/jcwill/ptp/checkpoints/vicuna_old/last.ckpt
 /home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/lightning/pytorch/utilities/_pytree.py:21: `isinstance(treespec, LeafSpec)` is deprecated, use `isinstance(treespec, TreeSpec) and treespec.is_leaf()` instead.
 /home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/lightning/pytorch/loops/training_epoch_loop.py:224: You're resuming from a checkpoint that ended before the epoch ended and your dataloader is not resumable. This can cause unreliable results if further training is done. Consider using an end-of-epoch checkpoint or make your dataloader resumable by implementing the `state_dict` / `load_state_dict` interface.
 /home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/lightning/pytorch/utilities/data.py:79: Trying to infer the `batch_size` from an ambiguous collection. The batch size we found is 1. To avoid any miscalculations, use `self.log(..., batch_size=batch_size)`.
-Epoch 495/99999 ━━━╸          51280/172900 15:13:20 •    2.42it/s v_num: _old   
-                                           13:55:58               train/correct:
-                                                                  3.646         
-                                                                  train/l_compl…
-                                                                  2.761         
-                                                                  val/correct:  
-                                                                  3.476         
-                                                                  val/l_complet…
-                                                                  3.099         
-Traceback (most recent call last):
-  File "/home/jcwill/Projects/ptp/.venv/bin/ptp_train", line 10, in <module>
-    sys.exit(main())
-             ~~~~^^
-  File "/home/jcwill/Projects/ptp/src/ptp/training.py", line 152, in _parse_args
-    main(
-    ~~~~^
-        experiment_dir=experiment_dir,
-        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    ...<2 lines>...
-        variant_name=args.variant,
-        ^^^^^^^^^^^^^^^^^^^^^^^^^^
-    )
-    ^
-  File "/home/jcwill/Projects/ptp/src/ptp/training.py", line 81, in main
-    trainer.fit(**fit_kwargs, ckpt_path=config.get("restore_ckpt", "last"))
-    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/lightning/pytorch/trainer/trainer.py", line 584, in fit
-    call._call_and_handle_interrupt(
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
-        self,
-        ^^^^^
-    ...<6 lines>...
-        weights_only,
-        ^^^^^^^^^^^^^
-    )
-    ^
-  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/lightning/pytorch/trainer/call.py", line 49, in _call_and_handle_interrupt
-    return trainer_fn(*args, **kwargs)
-  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/lightning/pytorch/trainer/trainer.py", line 630, in _fit_impl
-    self._run(model, ckpt_path=ckpt_path, weights_only=weights_only)
-    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/lightning/pytorch/trainer/trainer.py", line 1079, in _run
-    results = self._run_stage()
-  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/lightning/pytorch/trainer/trainer.py", line 1123, in _run_stage
-    self.fit_loop.run()
-    ~~~~~~~~~~~~~~~~~^^
-  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/lightning/pytorch/loops/fit_loop.py", line 217, in run
-    self.advance()
-    ~~~~~~~~~~~~^^
-  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/lightning/pytorch/loops/fit_loop.py", line 465, in advance
-    self.epoch_loop.run(self._data_fetcher)
-    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
-  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/lightning/pytorch/loops/training_epoch_loop.py", line 153, in run
-    self.advance(data_fetcher)
-    ~~~~~~~~~~~~^^^^^^^^^^^^^^
-  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/lightning/pytorch/loops/training_epoch_loop.py", line 375, in advance
-    call._call_callback_hooks(trainer, "on_train_batch_end", batch_output, batch, batch_idx)
-    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/lightning/pytorch/trainer/call.py", line 228, in _call_callback_hooks
-    fn(trainer, trainer.lightning_module, *args, **kwargs)
-    ~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/lightning/pytorch/callbacks/model_checkpoint.py", line 485, in on_train_batch_end
-    self._save_last_checkpoint(trainer, monitor_candidates)
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/lightning/pytorch/callbacks/model_checkpoint.py", line 923, in _save_last_checkpoint
-    self._save_checkpoint(trainer, filepath)
-    ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
-  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/lightning/pytorch/callbacks/model_checkpoint.py", line 600, in _save_checkpoint
-    trainer.save_checkpoint(filepath, self.save_weights_only)
-    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/lightning/pytorch/trainer/trainer.py", line 1464, in save_checkpoint
-    self.strategy.save_checkpoint(checkpoint, filepath, storage_options=storage_options)
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/lightning/pytorch/strategies/strategy.py", line 491, in save_checkpoint
-    self.checkpoint_io.save_checkpoint(checkpoint, filepath, storage_options=storage_options)
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/lightning/fabric/plugins/io/torch_io.py", line 58, in save_checkpoint
-    _atomic_save(checkpoint, path)
-    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
-  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/lightning/fabric/utilities/cloud_io.py", line 103, in _atomic_save
-    with fs.transaction, fs.open(urlpath, "wb") as f:
-                         ~~~~~~~^^^^^^^^^^^^^^^
-  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/fsspec/spec.py", line 1349, in open
-    f = self._open(
-        path,
-    ...<4 lines>...
-        **kwargs,
-    )
-  File "/home/jcwill/Projects/ptp/src/ptp/atomic_fs/__init__.py", line 59, in _open
-    return SameDirFileOpener(path, mode, fs=self, **kwargs)
-  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/fsspec/implementations/local.py", line 391, in __init__
-    self._open()
-    ~~~~~~~~~~^^
-  File "/home/jcwill/Projects/ptp/src/ptp/atomic_fs/__init__.py", line 39, in _open
-    fd, name = tempfile.mkstemp(dir=target_dir)
-               ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^
-  File "/home/jcwill/.local/share/uv/python/cpython-3.13.13-linux-x86_64-gnu/lib/python3.13/tempfile.py", line 354, in mkstemp
-    return _mkstemp_inner(dir, prefix, suffix, flags, output_type)
-  File "/home/jcwill/.local/share/uv/python/cpython-3.13.13-linux-x86_64-gnu/lib/python3.13/tempfile.py", line 255, in _mkstemp_inner
-    fd = _os.open(file, flags, 0o600)
-OSError: [Errno 122] Disk quota exceeded: '/extra/ucibdl1/jcwill/ptp/checkpoints/vicuna_old/tmp20gxob9z'
-[1;34mwandb[0m: 
-[1;34mwandb[0m: 🚀 View run [33mvicuna_old[0m at: [34mhttps://wandb.ai/jukamala/ptp-distill/runs/vicuna_old[0m

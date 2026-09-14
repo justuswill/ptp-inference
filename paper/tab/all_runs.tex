@@ -16,8 +16,11 @@ run & family & \multicolumn{1}{c}{tok./call} & \multicolumn{1}{c}{ms/tok.} & \mu
 \texttt{tmp\_seq-ptp-topp-0.99} & nucleus & 5.04 & 31.0 & 1.82$\times$ & 65.83 & 1.67 & 0.641 \\
 \texttt{ratio-10} & ratio & 2.62 & 31.0 & 1.82$\times$ & 70.12 & 1.57 & 0.717 \\
 \texttt{first\_2} & accept-$k$ & 2.00 & 31.7 & 1.78$\times$ & 49.29 & 40.92 & 0.515 \\
+\texttt{seq-ptp-entr-0.09-d0.1} & entropy-adaptive & 4.40 & 31.7 & 1.78$\times$ & 84.04 & 1.20 & 0.674 \\
+\texttt{seq-ptp-entr-0.03-d0.3} & entropy-adaptive & 4.39 & 31.7 & 1.78$\times$ & 83.91 & 1.20 & 0.673 \\
 \texttt{ratio-2} & ratio & 2.49 & 32.3 & 1.75$\times$ & 69.81 & 1.58 & 0.727 \\
 \texttt{ptp} & exact & 2.39 & 32.7 & 1.73$\times$ & 84.51 & 1.19 & 0.685 \\
+\texttt{seq-ptp-entr-0.09-d1.0} & entropy-adaptive & 4.08 & 32.8 & 1.72$\times$ & 82.51 & 1.22 & 0.615 \\
 \texttt{tmp\_seq-ptp-topp-0.98} & nucleus & 4.30 & 33.2 & 1.70$\times$ & 67.58 & 1.56 & 0.671 \\
 \texttt{ratio-p-0.01} & ratio & 2.36 & 33.9 & 1.66$\times$ & 62.33 & 1.83 & 0.736 \\
 \texttt{ratio-p-0.001} & ratio & 2.35 & 34.1 & 1.66$\times$ & 69.56 & 1.59 & 0.728 \\
@@ -31,9 +34,12 @@ run & family & \multicolumn{1}{c}{tok./call} & \multicolumn{1}{c}{ms/tok.} & \mu
 \texttt{tmp\_seq-ptp-topp-self-0.8-tok} & self-verified & 6.45 & 39.8 & 1.42$\times$ & 24.66 & 38.70 & 0.537 \\
 \texttt{first\_1.5} & accept-$k$ & 1.50 & 41.9 & 1.35$\times$ & 35.54 & 18.19 & 0.742 \\
 \texttt{thresh-0.01} & teacher threshold & 3.93 & 42.4 & 1.33$\times$ & 77.75 & 1.31 & 0.671 \\
+\texttt{entr-0.03-d0.3} & entropy-adaptive & 3.09 & 44.1 & 1.28$\times$ & 82.96 & 1.22 & 0.680 \\
 \texttt{tmp\_seq-ptp-topp-self-0.5-tok} & self-verified & 5.12 & 44.4 & 1.27$\times$ & 29.58 & 52.51 & 0.535 \\
 \texttt{thresh-0.1} & teacher threshold & 3.58 & 46.0 & 1.23$\times$ & 83.16 & 1.21 & 0.672 \\
+\texttt{seq-ptp-entr-0.09-d0.3} & entropy-adaptive & 4.40 & 46.9 & 1.20$\times$ & 84.47 & 1.20 & 0.674 \\
 \texttt{seq-ratio} & ratio & 3.43 & 48.1 & 1.17$\times$ & 83.53 & 1.21 & 0.689 \\
+\texttt{seq-ptp-entr-0.3-d0.3} & entropy-adaptive & 4.32 & 48.1 & 1.17$\times$ & 85.03 & 1.19 & 0.679 \\
 \texttt{tmp\_seq-ptp-topp-choice-5-0.98-bayes-p} & nucleus + ensemble & 4.38 & 48.2 & 1.17$\times$ & 82.46 & 1.23 & 0.658 \\
 \texttt{seq-ptp-self-tok} & self-verified & 3.86 & 49.9 & 1.13$\times$ & 65.92 & 1.60 & 0.555 \\
 \texttt{first\_1.2} & accept-$k$ & 1.20 & 51.6 & 1.09$\times$ & 48.75 & 2.90 & 0.722 \\
@@ -48,6 +54,8 @@ run & family & \multicolumn{1}{c}{tok./call} & \multicolumn{1}{c}{ms/tok.} & \mu
 \texttt{tmp\_seq-ptp-topp-choice-5-0.98} & nucleus + ensemble & 4.32 & 57.4 & 0.98$\times$ & 82.92 & 1.22 & 0.671 \\
 \texttt{thresh-0.9} & teacher threshold & 2.81 & 60.8 & 0.93$\times$ & 84.44 & 1.19 & 0.687 \\
 \texttt{first\_1} & accept-$k$ & 1.00 & 61.4 & 0.92$\times$ & 84.73 & 1.19 & 0.686 \\
+\texttt{entr-0.09-d0.3} & entropy-adaptive & 3.02 & 65.7 & 0.86$\times$ & 84.03 & 1.20 & 0.682 \\
+\texttt{entr-0.3-d0.3} & entropy-adaptive & 2.95 & 67.0 & 0.84$\times$ & 85.70 & 1.18 & 0.683 \\
 \texttt{conf-p-0.5} & student confidence & 2.01 & 69.4 & 0.81$\times$ & 41.42 & 17.03 & 0.512 \\
 \texttt{conf-p-0.8} & student confidence & 1.48 & 86.8 & 0.65$\times$ & 56.78 & 2.24 & 0.675 \\
 \texttt{conf-p-0.9} & student confidence & 1.34 & 92.7 & 0.61$\times$ & 64.95 & 1.77 & 0.679 \\

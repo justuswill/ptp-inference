@@ -8,6 +8,7 @@ chain & $\width(d) \equiv 1$ & fixed depth & n/a & SpS, PLD, SAMD \\
 $2$D window & $W$ wide, $N$ deep & fixed $(W, N)$ & no & Lookahead \\
 static tree & fixed, offline & per-head calibration accuracy & no & Medusa, Hydra, EAGLE, Recycling \\
 dynamic tree & per context & greedy on $\prod_j c_j$ & no & EAGLE-2 \\
+block-iterative & grows by $K$ dependent positions per drafter call & learned rank head & no & \citet{shi2026specblock} \\
 flat ensemble & $\width(d) \equiv K$ & fixed $K$, full depth & no & this work (\texttt{standard}) \\
 knapsack profile & nonincreasing $\width(d)$ & exact DP on $\Sfun[w,d]$ & \textbf{yes} & this work (\texttt{optimal}) \\
 block-wise ensemble & $K$ across $n$ blocks & fixed block size & yes & this work (\texttt{seq-n}) \\

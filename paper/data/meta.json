@@ -9,6 +9,6 @@
   "50": "scratch/vicuna_old_choice50_percall_full.json",
   "1000": "scratch/vicuna_old_seqn_choice1000_percall_full.json"
  },
- "collected_utc": "2026-09-11T14:04:14+00:00",
+ "collected_utc": "2026-09-12T08:09:10+00:00",
  "note": "Preliminary single-seed runs on 100 Spec-Bench first turns."
 }

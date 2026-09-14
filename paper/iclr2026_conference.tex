@@ -263,7 +263,12 @@ axis-aligned rectangles and therefore mismatches over a large area.
   model's distribution, \emph{greedy} reproduces greedy decoding only,
   \emph{biased} gives up both by design. ``overlap'' is what runs concurrently
   with verification. $p$ is the base model's distribution, $q$ / $\hat p$ the
-  proposal model's, $c_j$ its confidence at node $j$, $H$ the entropy.}
+  proposal model's, $c_j$ its confidence at node $j$, $H$ the entropy.
+  ``trained'' is what must be fitted before the method can be used: four of the
+  nine need nothing. $^\ast$SpS trains nothing but requires a second, smaller
+  model of the same family to exist. $^\dagger$SAMD is training-free in its
+  retrieval-only form; its strongest reported configuration falls back to a
+  trained drafter when retrieval misses.}
   \label{tab:baselines}
   \input{tab/baselines}
 \end{table}
@@ -278,9 +283,85 @@ Existing design choices are described below and existing methods are summarized 
 \subsection{Proposal Source}
 \label{sec:proposal}
 
-The framework used to sample multiple tokens in each call, builds core of each multi-token decoder. This usually involves architectural changes, training additional parameters, or finetuning the existing model. Although we will treat the proposal mechanism largely as a black-box, we will briefly describe some possible choices, summarized in \Cref{tab:}
+The framework used to sample multiple tokens in each call, builds core of each multi-token decoder. This usually involves architectural changes, training additional parameters, or finetuning the existing model. Although we will treat the proposal mechanism largely as a black-box, we will briefly describe some possible choices, summarized in \Cref{tab:source}
 
 \begin{ai}
+
+\paragraph{Trained proposals.}
+The most common choice is to train something small that predicts ahead.
+Speculative decoding uses a separate, smaller autoregressive model of the same
+family~\citep{leviathan2023speculative,chen2023accelerating}: the most expensive
+source per proposed token, since every token costs a forward pass through the
+drafter, but the only one whose proposals come with a full distribution $q$.
+Cheaper variants attach heads to the frozen target itself --- independent heads,
+one per future position~\citep{stern2018blockwise,cai2024medusa}, heads made
+sequentially dependent so each sees what the previous one
+drafted~\citep{ankner2024hydra}, or a single lightweight decoder layer run over
+hidden states rather than tokens~\citep{li2024eagle,li2024eagle2}. These cost a
+matmul per token instead of a model call, at the price of a training stage and a
+weaker proposal.
+
+\paragraph{Training-free proposals.}
+A proposal need not come from a model at all. Prompt lookup retrieves a
+continuation by matching the recent $n$-gram against the prompt and copying what
+followed~\citep{saxena2023pld}; SAM-Decoding~\citep{hu2024samdecoding} generalizes the
+match to a suffix automaton over the generated text and a reference corpus, at
+$O(1)$ per step; Token Recycling~\citep{luo2025recycling} keeps a table of the
+top-$k$ successors seen for each token and reads candidates out of it. Lookahead decoding instead runs Jacobi iterations on
+the target model itself and harvests $n$-grams from the
+trajectory~\citep{fu2024lookahead}. These sources are essentially free per
+proposed token --- a string match or a table lookup --- and apply to any model
+unmodified, which makes them attractive exactly where the answer is partly
+copyable, such as summarization. What they give up is a calibrated score: none
+can say how likely a proposed token is to survive verification.
+
+\paragraph{Parallel Token Prediction, our running example.}
+Throughout the paper the proposal comes from PTP~\citep{draxler2025ptp}, which we
+use because it is coordinated, exposes a confidence, and produces all of its
+tokens in a single call. Recall from \S\ref{sec:background} that PTP moves the
+randomness of sampling from a post-hoc draw to a model input: with
+$\aux_i \sim \mathcal{U}[0,1]$ fixed in advance, the token
+$t_i = \Pick(\aux_i, P_i)$ is a deterministic function of the context and the
+auxiliaries, so a model given $\aux_i, \dots, \aux_k$ can predict $t_k$ without
+knowing the tokens in between. One forward pass over the context plus $\nprop$
+auxiliary inputs therefore yields $\nprop$ proposed tokens. In the one-hot
+variant we use, the output distribution at each proposed position collapses
+towards a point mass and its probability doubles as a confidence $c_k$ --- the
+score that the allocation of \S\ref{sec:knapsack} and the branch weights of
+\S\ref{sec:pqd} both consume. Architecturally it is a gated LoRA
+adapter~\citep{hu2022lora} on a frozen base, so disabling the adapter recovers
+the original model exactly, which is what makes self-verification
+(\Cref{tab:verification}) possible with one set of weights. What distinguishes it
+from independent multi-token prediction is coordination: because all positions
+share the same auxiliaries, the proposed tokens are drawn from the joint, and the
+induced partition of the auxiliary square can follow the reference's curved cell
+boundaries instead of being a product of per-position rectangles
+(\Cref{fig:partition}).
+
+\paragraph{What carries over.}
+Three properties of the source, and only these, matter downstream. \emph{Cost per
+proposed token} spans orders of magnitude between the rows of \Cref{tab:source},
+and the allocation of \S\ref{sec:knapsack} counts nodes uniformly --- exactly the
+assumption that breaks for the training-free sources. \emph{Confidence} is
+whether a calibrated per-token score exists: the student-confidence rule of
+\Cref{tab:verification} needs one, and so do the branch weights in
+\S\ref{sec:pqd}, so the sources marked ``--'' can use neither.
+\emph{Coordination} is whether tokens are predicted jointly or apart, which caps
+what any acceptance rule can recover. Everything else about the source --- how it
+was trained, what architecture it has --- the rest of the paper does not need to
+know.
+
+\begin{table}[t]
+  \centering
+  \caption{Proposal sources. ``cost per token'' is the marginal cost of one more
+  proposed token; ``conf.'' is whether a calibrated per-token confidence is
+  available ($q$ a full distribution, $c_j$ / $c_k$ a scalar, ``per pos.'' a
+  score that ignores the other proposed positions, ``stale'' one carried over
+  from an earlier step); ``coord.'' is whether tokens are predicted jointly
+  rather than independently.}
+  \label{tab:source}
+  \input{tab/aspect_source}
+\end{table}
 
 \subsection{Proposal geometry: how many chances, and how long}
 \label{sec:geometry}
@@ -290,8 +371,11 @@ to spend it: one long continuation, many short ones, or a tree. Every choice is
 summarized by a \emph{width profile} $\width(d)$, the number of proposal strands
 still alive at depth $d$ (\S\ref{sec:knapsack} makes this precise), and
 Table~\ref{tab:geometry} classifies the options by how that profile is picked.
-The column that matters is the last but one: whether the allocation accounts for
-\emph{correlation} between strands. Failures are not independent --- some
+The allocation itself is chosen in one of four ways --- fixed offline, greedily
+from per-node confidences, by a learned head~\citep{shi2026specblock}, or, as we
+propose in \S\ref{sec:knapsack}, exactly. The column that matters, though, is the
+last but one: whether the allocation accounts for \emph{correlation} between
+strands. Failures are not independent --- some
 positions are hard for every strand at once --- and \S\ref{sec:model} shows this
 is what makes width saturate.
 
@@ -348,13 +432,18 @@ we are trying to stay faithful to. \emph{Does the rule preserve that
 distribution?} Only the exact and ratio rules do; the rest are deliberate
 relaxations, and the empirical question is what each one costs. We implement all
 eleven behind a single code path, so two runs differ only in the predicate.
+\citet{sharma2026acceptance} studies the same rules analytically, showing that
+many of their rejection regions are lower level sets of the base distribution;
+that characterization is deterministic and per-position, complementary to the
+distributional question we ask here.
 
 \begin{table}[t]
   \centering
   \caption{Verification rules. ``base call'' is whether the rule consults the
   model being accelerated; ``output'' is the resulting guarantee. Rules with no
   entry in ``used by'' are, to our knowledge, unexplored in the multi-token
-  setting; we evaluate all eleven in \S\ref{sec:experiments}.}
+  setting. We evaluate the first eleven in \S\ref{sec:experiments}; the last
+  requires a second probe of the base model and is listed but not run.}
   \label{tab:verification}
   \input{tab/aspect_verification}
 \end{table}
@@ -405,7 +494,13 @@ speculative sampling reaches the same guarantee by a different mechanism.
 
 \textbf{Parallelization.} Lookahead is the fused-pass row; quadratic
 decoding~\citep{samragh2025future} and its budgeted variant, Partial Quadratic
-Decoding~\citep{draxler2025ptp}, are the last two. \S\ref{sec:pqd} shows that the branch
+Decoding~\citep{draxler2025ptp}, are the last two.
+\citet{kumar2026ssd} independently arrive at the same structure, preparing
+speculations for predicted verification outcomes while verification is in
+flight, and \citet{shen2026specbranch} hedge against likely rejections with
+parallel branches. Both make explicit a cost our table suppresses: a branch that
+turns out to be wrong must be rolled back, so the budget buys expected progress
+rather than guaranteed progress. \S\ref{sec:pqd} shows that the branch
 weights and branch values PQD needs are both readable off the same survival
 function that solves the geometry problem, which removes the two separately
 calibrated estimates the original formulation requires.
@@ -892,6 +987,19 @@ quadratic expansion of~\citet{samragh2025future}; the connection
 between auxiliary variables and inverse autoregressive
 flows~\citep{kingma2016iaf} is noted there. Our branching model is a
 zero-inflated, shared-frailty Galton--Watson process~\citep{athreya1972branching}.
+
+Two concurrent efforts sit closest to this paper.
+\citet{kumar2026ssd} break the speculation--verification dependency in the same
+way Partial Quadratic Decoding does, preparing speculations for predicted
+verification outcomes; their focus is a systems realization, ours is where the
+branch weights and branch values should come from.
+\citet{sharma2026acceptance} gives a deterministic theory of which drafts are
+accepted, covering greedy, relaxed, top-$m$ and entropy-thresholded rules ---
+the same taxonomy as \Cref{tab:verification}, analyzed per position rather than
+in distribution. Finally, it is worth noting how narrow the deployed set is
+relative to the literature: vLLM ships EAGLE, multi-token prediction, draft
+models, PARD, an MLP proposer, $n$-gram and suffix decoding, i.e.\ a handful of
+proposal sources, all with the acceptance rule inherited rather than chosen.
 
 \section{Conclusion}
 
