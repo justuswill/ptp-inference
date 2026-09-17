@@ -75,3 +75,18 @@ Restored all states from the checkpoint at /extra/ucibdl1/jcwill/ptp/checkpoints
 /home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/lightning/pytorch/utilities/_pytree.py:21: `isinstance(treespec, LeafSpec)` is deprecated, use `isinstance(treespec, TreeSpec) and treespec.is_leaf()` instead.
 /home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/lightning/pytorch/loops/training_epoch_loop.py:224: You're resuming from a checkpoint that ended before the epoch ended and your dataloader is not resumable. This can cause unreliable results if further training is done. Consider using an end-of-epoch checkpoint or make your dataloader resumable by implementing the `state_dict` / `load_state_dict` interface.
 /home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/lightning/pytorch/utilities/data.py:79: Trying to infer the `batch_size` from an ambiguous collection. The batch size we found is 1. To avoid any miscalculations, use `self.log(..., batch_size=batch_size)`.
+
+Detected KeyboardInterrupt, attempting graceful shutdown ...
+Epoch 496/99999 ━━━━━━━━━╸    128000/172900 1 day,        2.17it/s v_num: _old  
+                                            15:00:40 •             train/correc…
+                                            5:45:04                2.417        
+                                                                   train/l_comp…
+                                                                   3.210        
+                                                                   val/correct: 
+                                                                   3.549        
+                                                                   val/l_comple…
+                                                                   3.073        
+Validation      ━╸            129/1000      0:00:32 •     3.98it/s              
+                                            0:03:39                             
+[1;34mwandb[0m: 
+[1;34mwandb[0m: 🚀 View run [33mvicuna_old[0m at: [34mhttps://wandb.ai/jukamala/ptp-distill/runs/vicuna_old[0m

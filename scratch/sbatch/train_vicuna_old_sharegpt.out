@@ -40,13 +40,14 @@ num nodes: 1
 ==================================================
 Saving checkpoints to /extra/ucibdl1/jcwill/ptp/checkpoints/vicuna_old_sharegpt
 Reduced flex_attention triton block sizes for this GPU's shared memory
-Loading weights:   0%|          | 0/291 [00:00<?, ?it/s]Loading weights: 100%|██████████| 291/291 [00:00<00:00, 56514.44it/s]
+Loading weights:   0%|          | 0/291 [00:00<?, ?it/s]Loading weights: 100%|██████████| 291/291 [00:00<00:00, 36968.21it/s]
 The following generation flags are not valid and may be ignored: ['temperature', 'top_p']. Set `TRANSFORMERS_VERBOSITY=info` for more details.
 wandb: WARNING The anonymous setting has no effect and will be removed in a future version.
 wandb: [wandb.login()] Loaded credentials for https://api.wandb.ai from /home/jcwill/.netrc.
 wandb: Currently logged in as: jukamala to https://api.wandb.ai. Use `wandb login --relogin` to force relogin
+wandb: setting up run vicuna_old_sharegpt
 wandb: Tracking run with wandb version 0.27.0
-wandb: Run data is saved locally in wandb/run-20260912_015657-vicuna_old_sharegpt
+wandb: Run data is saved locally in wandb/run-20260916_132732-vicuna_old_sharegpt
 wandb: Run `wandb offline` to turn off syncing.
 wandb: Resuming run vicuna_old_sharegpt
 wandb: ⭐️ View project at https://wandb.ai/jukamala/ptp-distill
@@ -72,4 +73,5 @@ Total FLOPs: 0
 Restored all states from the checkpoint at /extra/ucibdl1/jcwill/ptp/checkpoints/vicuna_old_sharegpt/last.ckpt
 /home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/lightning/pytorch/utilities/_pytree.py:21: `isinstance(treespec, LeafSpec)` is deprecated, use `isinstance(treespec, TreeSpec) and treespec.is_leaf()` instead.
 /home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/lightning/pytorch/loops/training_epoch_loop.py:224: You're resuming from a checkpoint that ended before the epoch ended and your dataloader is not resumable. This can cause unreliable results if further training is done. Consider using an end-of-epoch checkpoint or make your dataloader resumable by implementing the `state_dict` / `load_state_dict` interface.
+Triton cache error: compiled module cuda_utils.so could not be loaded
 /home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/lightning/pytorch/utilities/data.py:79: Trying to infer the `batch_size` from an ambiguous collection. The batch size we found is 2. To avoid any miscalculations, use `self.log(..., batch_size=batch_size)`.
