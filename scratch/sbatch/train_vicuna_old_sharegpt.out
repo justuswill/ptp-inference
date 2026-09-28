@@ -40,14 +40,13 @@ num nodes: 1
 ==================================================
 Saving checkpoints to /extra/ucibdl1/jcwill/ptp/checkpoints/vicuna_old_sharegpt
 Reduced flex_attention triton block sizes for this GPU's shared memory
-Loading weights:   0%|          | 0/291 [00:00<?, ?it/s]Loading weights: 100%|██████████| 291/291 [00:00<00:00, 36968.21it/s]
+Loading weights:   0%|          | 0/291 [00:00<?, ?it/s]Loading weights: 100%|██████████| 291/291 [00:00<00:00, 59463.24it/s]
 The following generation flags are not valid and may be ignored: ['temperature', 'top_p']. Set `TRANSFORMERS_VERBOSITY=info` for more details.
 wandb: WARNING The anonymous setting has no effect and will be removed in a future version.
 wandb: [wandb.login()] Loaded credentials for https://api.wandb.ai from /home/jcwill/.netrc.
 wandb: Currently logged in as: jukamala to https://api.wandb.ai. Use `wandb login --relogin` to force relogin
-wandb: setting up run vicuna_old_sharegpt
 wandb: Tracking run with wandb version 0.27.0
-wandb: Run data is saved locally in wandb/run-20260916_132732-vicuna_old_sharegpt
+wandb: Run data is saved locally in wandb/run-20260921_015840-vicuna_old_sharegpt
 wandb: Run `wandb offline` to turn off syncing.
 wandb: Resuming run vicuna_old_sharegpt
 wandb: ⭐️ View project at https://wandb.ai/jukamala/ptp-distill
@@ -73,5 +72,304 @@ Total FLOPs: 0
 Restored all states from the checkpoint at /extra/ucibdl1/jcwill/ptp/checkpoints/vicuna_old_sharegpt/last.ckpt
 /home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/lightning/pytorch/utilities/_pytree.py:21: `isinstance(treespec, LeafSpec)` is deprecated, use `isinstance(treespec, TreeSpec) and treespec.is_leaf()` instead.
 /home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/lightning/pytorch/loops/training_epoch_loop.py:224: You're resuming from a checkpoint that ended before the epoch ended and your dataloader is not resumable. This can cause unreliable results if further training is done. Consider using an end-of-epoch checkpoint or make your dataloader resumable by implementing the `state_dict` / `load_state_dict` interface.
-Triton cache error: compiled module cuda_utils.so could not be loaded
-/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/lightning/pytorch/utilities/data.py:79: Trying to infer the `batch_size` from an ambiguous collection. The batch size we found is 2. To avoid any miscalculations, use `self.log(..., batch_size=batch_size)`.
+Epoch 502/99999                            0/163543 0:00:06 • -:--:-- 0.00it/s 
+Traceback (most recent call last):
+  File "/home/jcwill/Projects/ptp/.venv/bin/ptp_train", line 10, in <module>
+    sys.exit(main())
+             ~~~~^^
+  File "/home/jcwill/Projects/ptp/src/ptp/training.py", line 152, in _parse_args
+    main(
+    ~~~~^
+        experiment_dir=experiment_dir,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<2 lines>...
+        variant_name=args.variant,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/jcwill/Projects/ptp/src/ptp/training.py", line 81, in main
+    trainer.fit(**fit_kwargs, ckpt_path=config.get("restore_ckpt", "last"))
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/lightning/pytorch/trainer/trainer.py", line 584, in fit
+    call._call_and_handle_interrupt(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        self,
+        ^^^^^
+    ...<6 lines>...
+        weights_only,
+        ^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/lightning/pytorch/trainer/call.py", line 49, in _call_and_handle_interrupt
+    return trainer_fn(*args, **kwargs)
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/lightning/pytorch/trainer/trainer.py", line 630, in _fit_impl
+    self._run(model, ckpt_path=ckpt_path, weights_only=weights_only)
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/lightning/pytorch/trainer/trainer.py", line 1079, in _run
+    results = self._run_stage()
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/lightning/pytorch/trainer/trainer.py", line 1123, in _run_stage
+    self.fit_loop.run()
+    ~~~~~~~~~~~~~~~~~^^
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/lightning/pytorch/loops/fit_loop.py", line 217, in run
+    self.advance()
+    ~~~~~~~~~~~~^^
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/lightning/pytorch/loops/fit_loop.py", line 465, in advance
+    self.epoch_loop.run(self._data_fetcher)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/lightning/pytorch/loops/training_epoch_loop.py", line 153, in run
+    self.advance(data_fetcher)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/lightning/pytorch/loops/training_epoch_loop.py", line 352, in advance
+    batch_output = self.automatic_optimization.run(trainer.optimizers[0], batch_idx, kwargs)
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/lightning/pytorch/loops/optimization/automatic.py", line 192, in run
+    self._optimizer_step(batch_idx, closure)
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/lightning/pytorch/loops/optimization/automatic.py", line 270, in _optimizer_step
+    call._call_lightning_module_hook(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        trainer,
+        ^^^^^^^^
+    ...<4 lines>...
+        train_step_and_backward_closure,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/lightning/pytorch/trainer/call.py", line 177, in _call_lightning_module_hook
+    output = fn(*args, **kwargs)
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/lightning/pytorch/core/module.py", line 1368, in optimizer_step
+    optimizer.step(closure=optimizer_closure)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/lightning/pytorch/core/optimizer.py", line 154, in step
+    step_output = self._strategy.optimizer_step(self._optimizer, closure, **kwargs)
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/lightning/pytorch/strategies/strategy.py", line 239, in optimizer_step
+    return self.precision_plugin.optimizer_step(optimizer, model=model, closure=closure, **kwargs)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/lightning/pytorch/plugins/precision/amp.py", line 76, in optimizer_step
+    return super().optimizer_step(optimizer, model=model, closure=closure, **kwargs)
+           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/lightning/pytorch/plugins/precision/precision.py", line 123, in optimizer_step
+    return optimizer.step(closure=closure, **kwargs)
+           ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/torch/optim/lr_scheduler.py", line 166, in wrapper
+    return func.__get__(opt, opt.__class__)(*args, **kwargs)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/torch/optim/optimizer.py", line 533, in wrapper
+    out = func(*args, **kwargs)
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/torch/optim/optimizer.py", line 81, in _use_grad
+    ret = func(*args, **kwargs)
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/torch/optim/adam.py", line 227, in step
+    loss = closure()
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/lightning/pytorch/plugins/precision/precision.py", line 109, in _wrap_closure
+    closure_result = closure()
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/lightning/pytorch/loops/optimization/automatic.py", line 146, in __call__
+    self._result = self.closure(*args, **kwargs)
+                   ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/torch/utils/_contextlib.py", line 124, in decorate_context
+    return func(*args, **kwargs)
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/lightning/pytorch/loops/optimization/automatic.py", line 131, in closure
+    step_output = self._step_fn()
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/lightning/pytorch/loops/optimization/automatic.py", line 319, in _training_step
+    training_step_output = call._call_strategy_hook(trainer, "training_step", *kwargs.values())
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/lightning/pytorch/trainer/call.py", line 329, in _call_strategy_hook
+    output = fn(*args, **kwargs)
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/lightning/pytorch/strategies/strategy.py", line 391, in training_step
+    return self.lightning_module.training_step(*args, **kwargs)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/home/jcwill/Projects/ptp/src/ptp/lit.py", line 219, in training_step
+    metrics = self.forward(batch, batch_idx)
+  File "/home/jcwill/Projects/ptp/src/ptp/lit.py", line 346, in forward
+    ar_outputs, completion_outputs = self.model(
+                                     ~~~~~~~~~~^
+        input_ids=input_ids,
+        ^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+        auxiliary_mask=attention_mask,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/torch/nn/modules/module.py", line 1779, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/torch/nn/modules/module.py", line 1790, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/home/jcwill/Projects/ptp/src/ptp/transformer.py", line 353, in forward
+    ar_outputs = self.ar_forward(input_ids, input_mask)
+  File "/home/jcwill/Projects/ptp/src/ptp/transformer.py", line 341, in ar_forward
+    teacher_outputs = self.model(
+        input_ids=input_ids,
+    ...<3 lines>...
+        output_hidden_states=self.output_hidden_states,
+    )
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/torch/nn/modules/module.py", line 1779, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/torch/nn/modules/module.py", line 1790, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/peft/peft_model.py", line 1993, in forward
+    return self.base_model(
+           ~~~~~~~~~~~~~~~^
+        input_ids=input_ids,
+        ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+        **kwargs,
+        ^^^^^^^^^
+    )
+    ^
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/torch/nn/modules/module.py", line 1779, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/torch/nn/modules/module.py", line 1790, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/peft/tuners/tuners_utils.py", line 330, in forward
+    return self.model.forward(*args, **kwargs)
+           ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/transformers/utils/generic.py", line 843, in wrapper
+    output = func(self, *args, **kwargs)
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/transformers/models/llama/modeling_llama.py", line 487, in forward
+    outputs: BaseModelOutputWithPast = self.model(
+                                       ~~~~~~~~~~^
+        input_ids=input_ids,
+        ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+        **kwargs,
+        ^^^^^^^^^
+    )
+    ^
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/torch/nn/modules/module.py", line 1779, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/torch/nn/modules/module.py", line 1790, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/transformers/utils/generic.py", line 917, in wrapper
+    output = func(self, *args, **kwargs)
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/transformers/utils/output_capturing.py", line 253, in wrapper
+    outputs = func(self, *args, **kwargs)
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/transformers/models/llama/modeling_llama.py", line 409, in forward
+    causal_mask = create_causal_mask(
+        config=self.config,
+    ...<4 lines>...
+        position_ids=position_ids,
+    )
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/transformers/utils/deprecation.py", line 171, in wrapped_func
+    return func(*args, **kwargs)
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/transformers/masking_utils.py", line 933, in create_causal_mask
+    causal_mask = mask_interface(
+        batch_size=batch_size,
+    ...<8 lines>...
+        use_vmap=use_vmap,  # Short-circuit to non-vmap expansions for the mask
+    )
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/transformers/masking_utils.py", line 681, in flex_attention_mask
+    block_mask = create_block_mask(
+        mask_mod=mask_function,
+    ...<5 lines>...
+        _compile=_is_torch_greater_or_equal_than_2_6,
+    )
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/torch/nn/attention/flex_attention.py", line 1271, in create_block_mask
+    return torch.compile(create_block_mask)(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        mask_mod, B, H, Q_LEN, KV_LEN, device, BLOCK_SIZE
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/torch/_dynamo/eval_frame.py", line 1038, in compile_wrapper
+    raise e.remove_dynamo_frames() from None  # see TORCHDYNAMO_VERBOSE=1
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/torch/_inductor/compile_fx.py", line 1053, in _compile_fx_inner
+    raise InductorError(e, currentframe()).with_traceback(
+        e.__traceback__
+    ) from None
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/torch/_inductor/compile_fx.py", line 1037, in _compile_fx_inner
+    mb_compiled_graph = fx_codegen_and_compile(
+        gm, example_inputs, inputs_to_check, **graph_kwargs
+    )
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/torch/_inductor/compile_fx.py", line 1798, in fx_codegen_and_compile
+    return scheme.codegen_and_compile(gm, example_inputs, inputs_to_check, graph_kwargs)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/torch/_inductor/compile_fx.py", line 1570, in codegen_and_compile
+    compiled_module = graph.compile_to_module()
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/torch/_inductor/graph.py", line 2499, in compile_to_module
+    return self._compile_to_module()
+           ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/torch/_inductor/graph.py", line 2509, in _compile_to_module
+    mod = self._compile_to_module_lines(wrapper_code)
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/torch/_inductor/graph.py", line 2584, in _compile_to_module_lines
+    mod = PyCodeCache.load_by_key_path(
+        key,
+    ...<6 lines>...
+        },
+    )
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/torch/_inductor/codecache.py", line 3764, in load_by_key_path
+    mod = _reload_python_module(key, path, set_sys_modules=in_toplevel)
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/torch/_inductor/runtime/compile_tasks.py", line 35, in _reload_python_module
+    exec(code, mod.__dict__, mod.__dict__)
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/tmp/torchinductor_jcwill/3e/c3e6qaajwd4idilskxw2bqmzg22g6nkdecz7wzj43g7jft3tgicy.py", line 510, in <module>
+    async_compile.wait(globals())
+    ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/torch/_inductor/async_compile.py", line 699, in wait
+    self._wait_futures(scope)
+    ~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/torch/_inductor/async_compile.py", line 719, in _wait_futures
+    kernel = result.result()
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/torch/_inductor/codecache.py", line 4361, in result
+    return self.result_fn()
+           ~~~~~~~~~~~~~~^^
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/torch/_inductor/async_compile.py", line 444, in get_result
+    raise e.with_name(kernel_name) from e
+torch._inductor.exc.InductorError: SubprocException: An exception occurred in a subprocess:
+
+Name=triton_per_fused__to_copy_clone_slice_sort_transpose_3
+Traceback (most recent call last):
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/torch/_inductor/compile_worker/subproc_pool.py", line 457, in do_job
+    result = job()
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/torch/_inductor/runtime/compile_tasks.py", line 67, in _worker_compile_triton
+    kernel = load_kernel()
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/torch/_inductor/codecache.py", line 3832, in _load_triton_kernel_from_source
+    return getattr(PyCodeCache.load(source_code), kernel_name)
+                   ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/torch/_inductor/codecache.py", line 3746, in load
+    return cls.load_by_key_path(key, path)
+           ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/torch/_inductor/codecache.py", line 3764, in load_by_key_path
+    mod = _reload_python_module(key, path, set_sys_modules=in_toplevel)
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/torch/_inductor/runtime/compile_tasks.py", line 35, in _reload_python_module
+    exec(code, mod.__dict__, mod.__dict__)
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/tmp/torchinductor_jcwill/qs/cqst47pintslrtgffs7iksojg5yvum72c3bahoeklrx5j4c45ijw.py", line 8, in <module>
+    triton_helpers.set_driver_to_gpu()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/torch/_inductor/runtime/triton_helpers.py", line 44, in set_driver_to_gpu
+    isinstance(driver.active, backend.driver)
+               ^^^^^^^^^^^^^
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/triton/runtime/driver.py", line 28, in active
+    self._active = self.default
+                   ^^^^^^^^^^^^
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/triton/runtime/driver.py", line 22, in default
+    self._default = _create_driver()
+                    ~~~~~~~~~~~~~~^^
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/triton/runtime/driver.py", line 10, in _create_driver
+    return active_drivers[0]()
+           ~~~~~~~~~~~~~~~~~^^
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/triton/backends/nvidia/driver.py", line 720, in __init__
+    self.utils = CudaUtils()  # TODO: make static
+                 ~~~~~~~~~^^
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/triton/backends/nvidia/driver.py", line 62, in __init__
+    mod = compile_module_from_src(
+        src=Path(os.path.join(dirname, "driver.c")).read_text(),
+    ...<3 lines>...
+        libraries=libraries,
+    )
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/triton/runtime/build.py", line 93, in compile_module_from_src
+    so = _build(name, src_path, tmpdir, library_dirs or [], include_dirs or [], libraries or [], ccflags or [])
+  File "/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/triton/runtime/build.py", line 48, in _build
+    subprocess.check_call(cc_cmd, stdout=subprocess.DEVNULL)
+    ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jcwill/.local/share/uv/python/cpython-3.13.13-linux-x86_64-gnu/lib/python3.13/subprocess.py", line 419, in check_call
+    raise CalledProcessError(retcode, cmd)
+subprocess.CalledProcessError: Command '['/usr/bin/gcc', '/var/tmp/tmpaquhuhdu/cuda_utils.c', '-O3', '-shared', '-fPIC', '-Wno-psabi', '-o', '/var/tmp/tmpaquhuhdu/cuda_utils.cpython-313-x86_64-linux-gnu.so', '-l:libcuda.so.1', '-L/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/triton/backends/nvidia/lib', '-L/lib/x86_64-linux-gnu', '-I/home/jcwill/Projects/ptp/.venv/lib/python3.13/site-packages/triton/backends/nvidia/include', '-I/var/tmp/tmpaquhuhdu', '-I/home/jcwill/.local/share/uv/python/cpython-3.13.13-linux-x86_64-gnu/include/python3.13']' returned non-zero exit status 1.
+
+
+Set TORCHDYNAMO_VERBOSE=1 for the internal stack trace (please do this especially if you're reporting a bug to PyTorch). For even more developer context, set TORCH_LOGS="+dynamo"
+
+[1;34mwandb[0m: 
+[1;34mwandb[0m: 🚀 View run [33mvicuna_old_sharegpt[0m at: [34mhttps://wandb.ai/jukamala/ptp-distill/runs/vicuna_old_sharegpt[0m

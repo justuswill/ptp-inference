@@ -467,6 +467,106 @@ forward pass.
   \input{tab/aspect_parallel}
 \end{table}
 
+\paragraph{The round layout.} We make the PQD round concrete for a single
+strand, as our vLLM implementation runs it. A round verifies a chain of $L$
+pending tokens and, in the same call, extends one proposal block per possible
+outcome: block $c \in \{0, \dots, D-1\}$ is conditioned on exactly $c$ pending
+tokens being correct and has width $b_c \geq 1$. When verification returns
+$\ncorrect = c$, the round commits $\min(c, L) + 1$ tokens, and block
+$\min(c, L)$ seeds the next round with
+\begin{equation}
+  L' \;=\; \min\big(b_{\min(c, L)} - 1,\; D - 1\big)
+  \label{eq:nextchain}
+\end{equation}
+pending tokens. A \emph{layout} is a depth $D$ together with the block widths
+$(b_0, \dots, b_{D-1})$, and its cost is the number of positions in the call,
+$\budget = D + \sum_c b_c$. Because $L' \leq D - 1$, a block wider than $D$ is
+dead weight, so $1 \leq b_c \leq D$ and $D \leq \budget - D \leq D^2$. The square
+layout $b_c \equiv D$ is quadratic decoding truncated at depth $D$; every other
+layout is a budgeted PQD.
+
+\paragraph{What a layout is worth.} The layout acts on acceptance through
+feedback: the width of the winning block fixes how long the next chain is, and
+so how much the next round can commit. We compare four models of that feedback.
+All four are fitted from a single recording: the per-round correct count $c_t$
+of a square run at depth $20$, in request order. At that depth a round is never
+capped ($c_t \leq 19 < L$), so $c_t$ is the \emph{latent} count --- how far the
+round would have gone given room --- rather than the harvested one. From it we
+read the marginal $\pi(c)$, its tail $\bar\pi(i) = \Pr[c_t \geq i]$, and the
+transition table $T(c' \mid c)$ between consecutive rounds of a request.
+
+\emph{One-step.} Pending slot $i$ of block $c$ pays if block $c$ wins and the
+next round verifies that far. Holding both factors at their marginals makes the
+objective separable over slots,
+\begin{equation}
+  A_{\mathrm{1}}(b) \;=\; \sum_{c=0}^{D-1} \pi(c) \sum_{i=1}^{b_c - 1} \bar\pi(i),
+  \label{eq:onestep}
+\end{equation}
+so the acceptance distribution never responds to the layout.
+
+\emph{Markov.} The same i.i.d.\ draws $c_t \sim \pi$, but the chain length is
+now state: $L_{t+1}$ follows \eqref{eq:nextchain} from $(L_t, c_t)$. A layout
+that starves the deep blocks now visibly shortens future chains.
+
+\emph{Context.} The state is $(L_t, c_{t-1})$ and the round's count is drawn
+from $c_t \sim T(\cdot \mid c_{t-1})$ instead of the marginal. This matters
+because rounds are persistent: $c_t$ has lag-1 autocorrelation $0.31$ within a
+request, and $\mathbb{E}[c_t \mid c_{t-1}]$ runs from $3.1$ after a round that
+accepted nothing to $10.8$ after one that accepted nineteen.
+
+\emph{Carry.} Context, plus the one quantity a square run cannot show. A round
+offering $L$ slots that would have gone $c > L$ deep commits $L + 1$ tokens and
+leaves $r = c - L$ known-good tokens ahead of it; the next round's effective
+count is
+\begin{equation}
+  c_{t+1} \;=\; \max\big(\hat c,\; r_t\big),
+  \qquad \hat c \sim T(\cdot \mid c_t),
+  \qquad r_t = \max(c_t - L_t,\, 0).
+  \label{eq:carry}
+\end{equation}
+The latent count does two jobs --- how easy the region is and how much of it is
+left --- and in a square run, where depth always equals consumption, the two
+cannot be told apart. Carrying the residual separates them. It adds no
+parameter, and a layout that never caps ($r_t \equiv 0$) reduces it to the
+context model exactly.
+
+The last three models are scored over the same horizon the measurements average
+over: we propagate probability mass over the state $(L_t, c_t, r_t)$, indexed by
+the number of tokens generated so far, until $128$ tokens have been emitted, and
+report the ratio of expected committed tokens to expected rounds,
+$A(b) = \mathbb{E}[\text{tokens}] / \mathbb{E}[\text{rounds}]$. The
+propagation is exact and runs on a CPU, so any layout can be scored from the
+recording before it is built.
+
+\paragraph{Throughput.} Accepted tokens per round is the algorithm's yield, not
+its speed. We divide it by a round-cost model fitted by least squares to
+exclusive-lock timings of seven layouts,
+\begin{equation}
+  \text{tok/s} \;=\; \frac{A(b)}{\tau(\budget, D)},
+  \qquad
+  \tau(\budget, D) \;\approx\; 4.10 + 3.3 \times 10^{-3}\,\budget + 8.4 \times 10^{-3}\, D \ \text{ms}.
+  \label{eq:roundcost}
+\end{equation}
+The fit is valid only for $\budget \leq 128$: past that width the GEMM tiling
+steps up, and the square at $D = 11$ ($\budget = 132$) costs $5.99$\,ms against
+$4.56$\,ms for $D = 10$ ($\budget = 110$), a jump no linear term can see.
+
+\paragraph{Finding the best layout.} Under the one-step model,
+\eqref{eq:onestep} is a sum of per-slot values $\pi(c)\,\bar\pi(i)$, each
+nonincreasing in $i$, so sorting all slots by value and filling the budget is
+exact. The feedback models are not separable: a block's width changes the
+distribution of every later round, which rules out the dynamic program
+\eqref{eq:dp}. We therefore search. For each feasible depth $D$ we start from
+the even split of $\budget - D$ over the $D$ blocks, and from a front-loaded
+split that fills the shallow blocks to $D$ first, and hill-climb by moving one
+unit of width from block $s$ to block $t$ whenever that raises $A(b)$, subject to
+$1 \leq b_c \leq D$, until no single transfer helps; the best local optimum over
+seeds and depths is the pick. To maximize throughput instead, a coarse scan
+first scores the even split at every $(\budget, D)$ with $\budget \leq 128$ by
+\eqref{eq:roundcost}, and the eight best are refined by the same hill climb.
+Unlike the knapsack of \S\ref{sec:knapsack}, the result is a local optimum,
+not a certified one.
+
 \subsection{What the framework generalizes}
 \label{sec:generalize}
 
